@@ -1,0 +1,23 @@
+# --- NIKDY necommitovat skutecne klice ---
+SpotifyDeck/secrets.h
+secrets.h
+*.token
+.env
+
+# Build artefakty
+build/
+*.bin
+*.elf
+*.map
+*.hex
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+
+# Build vystup arduino-cli
+.build/
