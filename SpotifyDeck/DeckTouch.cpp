@@ -10,9 +10,51 @@
 
 namespace {
 
-SPIClass            touchSpi(VSPI);
+// ---------------------------------------------------------------------
+//  Dve zcela ruzna zapojeni dotyku podle modelu desky:
+//
+//  2432S024R - XPT2046 SDILI SPI s displejem (CS 33). Obslouzi ho primo
+//              TFT_eSPI, ktera si hlida stridani transakci na sbernici -
+//              vyzaduje "#define TOUCH_CS 33" v User_Setup.h.
+//
+//  2432S028R - XPT2046 ma VLASTNI sbernici (SCK 25, MOSI 32, MISO 39,
+//              CS 33). Tu obsluhuje knihovna XPT2046_Touchscreen, a musi
+//              bezet na jinem SPI periferiu nez displej - jinak druhe
+//              spi.begin() prepne vstup MISO pres GPIO matici na piny
+//              displeje a dotyk cte cizi pin.
+// ---------------------------------------------------------------------
+#if DECK_BOARD == 24
+  #if !defined(TOUCH_CS)
+    #error "Pro 2432S024 zkopiruj User_Setup.h z korene projektu do TFT_eSPI (potrebuje TOUCH_CS 33)."
+  #endif
+#else
+  #if defined(USE_HSPI_PORT)
+SPIClass            touchSpi(VSPI);   // displej je na HSPI
+  #else
+SPIClass            touchSpi(HSPI);   // displej je na VSPI
+  #endif
 XPT2046_Touchscreen ts(PIN_TOUCH_CS, PIN_TOUCH_IRQ);
+#endif
+
 Preferences         prefs;
+
+// Jednotne cteni surovych hodnot bez ohledu na zapojeni.
+// Vraci true, kdyz je prst na displeji.
+bool readRawTouch(int16_t& rx, int16_t& ry, int16_t& rz) {
+#if DECK_BOARD == 24
+  rz = (int16_t)tft.getTouchRawZ();
+  if (rz < TOUCH_Z_MIN) return false;
+  uint16_t x = 0, y = 0;
+  tft.getTouchRaw(&x, &y);
+  rx = (int16_t)x;
+  ry = (int16_t)y;
+  return true;
+#else
+  TS_Point p = ts.getPoint();
+  rx = p.x; ry = p.y; rz = p.z;
+  return rz >= TOUCH_Z_MIN;
+#endif
+}
 
 // Kalibrace: dva referencni body. "swap" rika, jestli surova osa X
 // odpovida X na displeji, nebo jestli je panel otoceny o 90 stupnu.
@@ -46,13 +88,23 @@ int16_t mapAxis(int16_t raw, int16_t a0, int16_t a1, int16_t span) {
   return (int16_t)constrain(v, 0L, (long)span - 1);
 }
 
-// Prevede surovy vzorek na pixely podle kalibrace a otoceni.
+// Prevede surovy vzorek na pixely.
+//
+// Kalibrace se vzdy porizuje pri aktualnim otoceni a setRotation() ji
+// zahazuje, takze u zkalibrovane desky uz je otoceni "zapecene" v ni.
+// Jen zalozni (nezkalibrovane) hodnoty plati pro rotaci 1 - pri rotaci 3
+// je displej otoceny o 180 stupnu, takze se obe osy musi prevratit.
 void rawToScreen(int16_t rx, int16_t ry, int16_t& sx, int16_t& sy) {
   int16_t ax = g_cal.swap ? ry : rx;
   int16_t ay = g_cal.swap ? rx : ry;
 
   sx = mapAxis(ax, g_cal.rawX0, g_cal.rawX1, SCREEN_W);
   sy = mapAxis(ay, g_cal.rawY0, g_cal.rawY1, SCREEN_H);
+
+  if (!g_cal.valid && g_rotation == 3) {
+    sx = SCREEN_W - 1 - sx;
+    sy = SCREEN_H - 1 - sy;
+  }
 }
 
 void loadCalib() {
@@ -96,18 +148,18 @@ void saveCalib() {
 // Precte jeden usazeny dotyk: pocka, az prst dosedne, nasbira vzorky
 // a vrati jejich median. Pouziva se jen pri kalibraci.
 bool readSettled(int16_t& rx, int16_t& ry, uint32_t timeoutMs) {
-  uint32_t deadline = millis() + timeoutMs;
+  const uint32_t deadline = millis() + timeoutMs;
 
-  while (millis() < deadline) {
-    TS_Point p = ts.getPoint();
-    if (p.z < TOUCH_Z_MIN) { delay(10); continue; }
+  int16_t px = 0, py = 0, pz = 0;
+
+  while ((int32_t)(millis() - deadline) < 0) {
+    if (!readRawTouch(px, py, pz)) { delay(10); continue; }
 
     delay(80);                                  // nechat prst usadit
     int16_t xs[9], ys[9];
     int n = 0;
     for (int i = 0; i < 9; i++) {
-      TS_Point q = ts.getPoint();
-      if (q.z >= TOUCH_Z_MIN) { xs[n] = q.x; ys[n] = q.y; n++; }
+      if (readRawTouch(px, py, pz)) { xs[n] = px; ys[n] = py; n++; }
       delay(12);
     }
     if (n < 5) continue;
@@ -124,7 +176,7 @@ bool readSettled(int16_t& rx, int16_t& ry, uint32_t timeoutMs) {
     rx = xs[n / 2];
     ry = ys[n / 2];
 
-    while (ts.getPoint().z >= TOUCH_Z_MIN) delay(20);   // pockat na zvednuti
+    while (readRawTouch(px, py, pz)) delay(20);         // pockat na zvednuti
     delay(150);
     return true;
   }
@@ -144,11 +196,22 @@ void drawTarget(int16_t x, int16_t y, uint16_t color) {
 void Touch::begin() {
   loadCalib();
 
+#if DECK_BOARD == 24
+  // Nic se neinicializuje - dotyk jede po sbernici displeje a stara se
+  // o nej TFT_eSPI, ktera uz bezi.
+  LOGLN("[touch] XPT2046 na sbernici displeje (CS 33)");
+#else
   touchSpi.begin(PIN_TOUCH_SCK, PIN_TOUCH_MISO, PIN_TOUCH_MOSI, PIN_TOUCH_CS);
   ts.begin(touchSpi);
-  // Rotaci si resime sami v rawToScreen(), aby kalibrace platila
-  // nezavisle na tom, jak je otoceny displej. 1 = identita.
+  // Rotaci resi az rawToScreen(), aby kalibrace platila nezavisle na tom,
+  // jak je otoceny displej. 1 = identita, zadna transformace.
   ts.setRotation(1);
+  #if defined(USE_HSPI_PORT)
+  LOGLN("[touch] XPT2046 na vlastni sbernici VSPI");
+  #else
+  LOGLN("[touch] XPT2046 na vlastni sbernici HSPI");
+  #endif
+#endif
 
   g_lastActivity = millis();
   LOGF("[touch] kalibrace %s, rotace %u\n",
@@ -170,11 +233,11 @@ TouchEvent Touch::poll() {
   }
   g_lastSample = now;
 
-  TS_Point p = ts.getPoint();
-  bool touching = (p.z >= TOUCH_Z_MIN);
+  int16_t rx = 0, ry = 0, rz = 0;
+  bool touching = readRawTouch(rx, ry, rz);
 
   int16_t sx = g_lastX, sy = g_lastY;
-  if (touching) rawToScreen(p.x, p.y, sx, sy);
+  if (touching) rawToScreen(rx, ry, sx, sy);
 
   if (touching) {
     g_missCount = 0;

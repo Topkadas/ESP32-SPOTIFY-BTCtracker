@@ -29,6 +29,7 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <Wire.h>
 
 #include "DeckArt.h"
 #include "DeckClock.h"
@@ -130,6 +131,10 @@ void drawPage(bool full) {
     default: break;
   }
 
+  // Prekresleni cele stranky smazalo i stavovy radek, takze se musi
+  // vynutit jeho opetovne vykresleni - jinak by zustal prazdny az do
+  // prvni zmeny hodin nebo sily signalu.
+  if (full) Ui::invalidateStatus();
   Ui::setPageDots(PAGE_N, (uint8_t)g_page);
   Ui::updateStatus();
 
@@ -217,7 +222,12 @@ void pollSpotify() {
           bool full = trackChanged || artChanged || wasOther;
           if (full) Ui::dipBegin();
           Ui::nowPlaying(g_state, full);
-          if (full) { Ui::setPageDots(PAGE_N, (uint8_t)g_page); Ui::dipEnd(); }
+          if (full) {
+            Ui::invalidateStatus();
+            Ui::setPageDots(PAGE_N, (uint8_t)g_page);
+            Ui::updateStatus();
+            Ui::dipEnd();
+          }
         }
         applyLed();
       }
@@ -575,6 +585,105 @@ void handleTouch() {
 }
 
 // ---------------------------------------------------------------------
+//  Sonda dotykoveho radice
+//
+//  Rodina 2432S024 ma tri varianty a kazda ma dotyk uplne jinde:
+//    -C  kapacitni CST820 na I2C   (SDA 33, SCL 32, RST 25, INT 21)
+//    -R  rezistivni XPT2046 na SPI sdilene s displejem (CS 33, IRQ 36)
+//    -N  zadny dotyk
+//  Misto lustení potisku se deska proste zepta sama sebe.
+//
+//  MUSI se volat drive nez tft.init(), protoze si na chvili bere piny
+//  displeje (SCK/MOSI/MISO) pro rucne odtaktovane cteni XPT2046.
+// ---------------------------------------------------------------------
+#if TOUCH_PROBE
+
+// Rucne odtaktovane cteni XPT2046 - nezavisle na jakekoliv knihovne.
+uint16_t xptRead(uint8_t cmd, uint8_t sck, uint8_t mosi, uint8_t miso,
+                 uint8_t cs) {
+  digitalWrite(cs, LOW);
+  delayMicroseconds(5);
+
+  for (int i = 7; i >= 0; i--) {                 // prikaz, MSB napred
+    digitalWrite(mosi, (cmd >> i) & 1);
+    digitalWrite(sck, HIGH); delayMicroseconds(3);
+    digitalWrite(sck, LOW);  delayMicroseconds(3);
+  }
+  digitalWrite(sck, HIGH); delayMicroseconds(3); // cekaci takt prevodniku
+  digitalWrite(sck, LOW);  delayMicroseconds(3);
+
+  uint16_t v = 0;
+  for (int i = 0; i < 12; i++) {                 // 12 bitu vysledku
+    digitalWrite(sck, HIGH); delayMicroseconds(3);
+    v = (uint16_t)((v << 1) | (digitalRead(miso) ? 1 : 0));
+    digitalWrite(sck, LOW);  delayMicroseconds(3);
+  }
+
+  digitalWrite(cs, HIGH);
+  return v;
+}
+
+void probeTouch() {
+  LOGLN("[probe] hledam dotykovy radic...");
+
+  // --- 1) kapacitni CST820 na I2C ------------------------------------
+  // Nejdriv, protoze SPI sekvence by kapacitnimu cipu drzela RST.
+  pinMode(25, OUTPUT);                  // CST820 RST
+  digitalWrite(25, LOW);  delay(20);
+  digitalWrite(25, HIGH); delay(60);    // cip po resetu chvili nabiha
+
+  int i2cFound = 0;
+  if (Wire.begin(33, 32, 100000)) {     // SDA 33, SCL 32
+    for (uint8_t addr = 1; addr < 127; addr++) {
+      Wire.beginTransmission(addr);
+      if (Wire.endTransmission() == 0) {
+        LOGF("[probe] I2C odpovida adresa 0x%02X\n", addr);
+        i2cFound++;
+      }
+    }
+    Wire.end();
+  } else {
+    LOGLN("[probe] I2C se nepodarilo nastartovat");
+  }
+
+  if (i2cFound) {
+    LOGLN("[probe] VYSLEDEK: kapacitni dotyk (varianta 2432S024C)");
+    return;
+  }
+  LOGLN("[probe] na I2C nikdo neodpovedel");
+
+  // --- 2) rezistivni XPT2046 na sbernici displeje ---------------------
+  const uint8_t SCK = 14, MOSI = 13, MISO = 12, CS = 33;
+  pinMode(15, OUTPUT); digitalWrite(15, HIGH);   // CS displeje vypnout
+  pinMode(SCK, OUTPUT);  digitalWrite(SCK, LOW);
+  pinMode(MOSI, OUTPUT); digitalWrite(MOSI, LOW);
+  pinMode(MISO, INPUT);                          // GPIO12 je strapping - jen cist
+  pinMode(CS, OUTPUT);   digitalWrite(CS, HIGH);
+  delay(5);
+
+  uint16_t z1 = xptRead(0xB1, SCK, MOSI, MISO, CS);
+  uint16_t x  = xptRead(0xD1, SCK, MOSI, MISO, CS);
+  uint16_t y  = xptRead(0x91, SCK, MOSI, MISO, CS);
+  LOGF("[probe] XPT2046 na CS33: z1=%u x=%u y=%u\n", z1, x, y);
+
+  // Nepripojeny cip vraci porad 0 nebo porad 4095 (plovouci vstup).
+  bool plausible = !((z1 == 0 && x == 0 && y == 0) ||
+                     (z1 == 4095 && x == 4095 && y == 4095));
+
+  if (plausible) {
+    LOGLN("[probe] VYSLEDEK: rezistivni dotyk XPT2046 (varianta 2432S024R)");
+  } else {
+    LOGLN("[probe] VYSLEDEK: dotyk nenalezen (varianta 2432S024N?)");
+  }
+
+  // Piny zase pustit, at je tft.init() muze prevzit.
+  pinMode(SCK, INPUT);
+  pinMode(MOSI, INPUT);
+  pinMode(CS, INPUT);
+}
+#endif  // TOUCH_PROBE
+
+// ---------------------------------------------------------------------
 //  setup / loop
 // ---------------------------------------------------------------------
 void setup() {
@@ -583,6 +692,11 @@ void setup() {
   LOGLN("\n=== SpotifyDeck ===");
 
   Lang::begin();           // jazyk prostredi nacteny z NVS
+
+#if TOUCH_PROBE
+  probeTouch();            // musi byt pred tft.init()
+#endif
+
   Touch::begin();          // nacte otoceni z NVS jeste pred inicializaci TFT
   Ui::begin();
   Ui::splash();

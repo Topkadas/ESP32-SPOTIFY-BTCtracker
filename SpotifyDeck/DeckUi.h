@@ -44,6 +44,7 @@ void updateProgress(uint32_t progressMs, uint32_t durationMs);
 void updateControls(const PlayerState& st);
 void updateVolume(int volume, bool supported);
 void updateStatus();
+void invalidateStatus();   // po prekresleni cele stranky
 void setPageDots(uint8_t count, uint8_t active);
 void tickMarquee();
 

@@ -38,12 +38,29 @@
 #define SCREEN_H            240
 
 // =====================================================================
-//  PINY  -  ESP32-2432S028R (CYD)
+//  MODEL DESKY
 // =====================================================================
-//  Displej (HSPI) je nastaveny v TFT_eSPI/User_Setup.h, ne tady.
-#define PIN_BACKLIGHT        21
+//  Rodina "Cheap Yellow Display" ma nekolik modelu a lisi se pinem
+//  podsviceni. Piny displeje (12/13/14/15/2) maji stejne, proto stejny
+//  User_Setup.h funguje na obou.
+//
+//    28 = ESP32-2432S028   2,8" - podsviceni GPIO21
+//    24 = ESP32-2432S024   2,4" - podsviceni GPIO27
+//
+//  Kdyz nevis, nahraj s BL_SELFTEST a deska si pin najde sama.
+#define DECK_BOARD           24
 
-// XPT2046 dotyk - vlastni SPI sbernice (VSPI)
+// =====================================================================
+//  PINY
+// =====================================================================
+//  Displej (SPI) je nastaveny v TFT_eSPI/User_Setup.h, ne tady.
+#if DECK_BOARD == 24
+  #define PIN_BACKLIGHT      27
+#else
+  #define PIN_BACKLIGHT      21
+#endif
+
+// XPT2046 dotyk - vlastni SPI sbernice
 #define PIN_TOUCH_SCK        25
 #define PIN_TOUCH_MOSI       32   // T_DIN
 #define PIN_TOUCH_MISO       39   // T_OUT  (jen vstup)
@@ -51,6 +68,9 @@
 #define PIN_TOUCH_IRQ        36   // T_IRQ  (jen vstup)
 
 #define PIN_LDR              34   // fotorezistor, ADC1 - funguje i s WiFi
+//  0 = vetsi hodnota z ADC znamena vic svetla (bezne zapojeni CYD)
+//  1 = obracene; nastav, kdyz se displej ztlumuje na svetle misto ve tme
+#define LDR_INVERTED          0
 #define PIN_LED_R             4   // RGB LED je ACTIVE LOW
 #define PIN_LED_G            16
 #define PIN_LED_B            17
@@ -58,6 +78,23 @@
 // =====================================================================
 //  PODSVICENI
 // =====================================================================
+//  Polarita podsviceni se mezi klony CYD lisi. Kdyz je displej po
+//  nahrani cerny, ale puvodni sketch na desce svitil (takovy sketch
+//  na GPIO21 vetsinou vubec nesahal), je to tenhle prepinac.
+//    0 = HIGH rozsvecuje  (vetsina desek)
+//    1 = LOW rozsvecuje
+#define BL_ACTIVE_LOW         0
+
+//  Self-test hledani pinu podsviceni: projede kandidaty 27/21/16/5,
+//  kazdy chvili HIGH a chvili LOW, a na displej napise, ktery zrovna
+//  zkousi. Hodnota = pocet kol. 0 = test vypnuty (normalni provoz).
+#define BL_SELFTEST           0
+
+//  Sonda dotykoveho radice: pri startu zjisti, jestli je na desce
+//  kapacitni CST820 (I2C) nebo rezistivni XPT2046 (SPI), a napise to
+//  do Serialu. Po zjisteni varianty se da vypnout.
+#define TOUCH_PROBE           0   // 1 = pri startu zjistit typ dotyku a napsat do Serialu
+
 #define BL_PWM_FREQ       5000
 #define BL_PWM_BITS         12          // 0..4095
 #define BL_MAX            4095
@@ -167,8 +204,8 @@
 #define PROG_BAR_W          212          // 54 .. 266
 #define TIME_L_X             14
 #define TIME_R_X            306
-#define PROG_HIT_Y          172
-#define PROG_HIT_H           26
+#define PROG_HIT_Y          178          // pod obalem, ktery konci na 176
+#define PROG_HIT_H           18
 
 #define CTRL_X                8
 #define CTRL_Y              200

@@ -82,6 +82,18 @@ uint16_t blTarget = BL_MAX;
 bool     blReady  = false;
 bool     ledOk    = false;
 bool     blDipped = false;
+uint16_t blDipFrom = BL_MAX;   // jas, na ktery se po prekresleni vratime
+
+// Jedine misto, kde se sahá na podsviceni. Resi polaritu i to, jestli
+// se povedlo pripojit PWM - zbytek kodu uz jen rika, jak moc ma svitit.
+void blWrite(uint16_t duty) {
+  duty = constrain(duty, (uint16_t)0, (uint16_t)BL_MAX);
+#if BL_ACTIVE_LOW
+  duty = BL_MAX - duty;
+#endif
+  if (blReady) ledcWrite(PIN_BACKLIGHT, duty);
+  else         digitalWrite(PIN_BACKLIGHT, duty > BL_MAX / 2 ? HIGH : LOW);
+}
 
 void formatTime(uint32_t ms, char* out, size_t cap) {
   uint32_t total = ms / 1000;
@@ -204,15 +216,75 @@ void drawProgressBar(uint32_t progressMs, uint32_t durationMs) {
 //  Verejne API
 // =====================================================================
 void Ui::begin() {
+  // Podsviceni zapnout jako uplne prvni vec a natvrdo. Kdyz User_Setup.h
+  // nedefinuje TFT_BL (coz je bezna konfigurace), nikdo jiny na GPIO21
+  // nesahne a displej zustane tmavy, i kdyz do nej kreslime spravne.
+  pinMode(PIN_BACKLIGHT, OUTPUT);
+  digitalWrite(PIN_BACKLIGHT, BL_ACTIVE_LOW ? LOW : HIGH);
+
   tft.init();
   tft.setRotation(Touch::rotation());
   tft.setSwapBytes(true);
   tft.fillScreen(TFT_BLACK);
+  LOGF("[ui] displej %dx%d, rotace %u\n", tft.width(), tft.height(),
+       Touch::rotation());
+
+#if BL_SELFTEST
+  // Hledani pinu podsviceni. Rodina CYD ma podsviceni podle modelu na
+  // ruznych pinech - 2432S028 na GPIO21, 2432S024 podle vseho na GPIO27.
+  // Projedou se kandidati, kazdy chvili HIGH a chvili LOW, a uzivatel
+  // rekne, u ktereho cisla se displej rozsvitil.
+  //
+  // Zamerne se vynechavaji piny, na kterych visi displej (2, 12, 13, 14,
+  // 15), UART (1, 3) a strapping pin 0.
+  {
+    const uint8_t candidates[] = {27, 21, 16, 5};
+    const int n = sizeof(candidates) / sizeof(candidates[0]);
+
+    // Cely sweep se nekolikrat zopakuje a kazda faze drzi dost dlouho,
+    // aby se stihlo precist velke cislo pinu na obrazovce.
+    for (int round = 1; round <= BL_SELFTEST; round++) {
+      for (int i = 0; i < n; i++) {
+        const uint8_t pin = candidates[i];
+
+        for (int high = 1; high >= 0; high--) {
+          pinMode(pin, OUTPUT);
+          digitalWrite(pin, high ? HIGH : LOW);
+
+          char big[16], sub[48];
+          snprintf(big, sizeof(big), "GPIO %d", (int)pin);
+          snprintf(sub, sizeof(sub), "%s   -   kolo %d/%d",
+                   high ? "HIGH" : "LOW", round, BL_SELFTEST);
+
+          tft.fillScreen(TFT_WHITE);
+          tft.setTextDatum(MC_DATUM);
+          tft.setTextColor(TFT_BLACK, TFT_WHITE);
+          tft.setFreeFont(&FreeSansBold24pt7b);
+          tft.drawString(big, SCREEN_W / 2, SCREEN_H / 2 - 18);
+          tft.setFreeFont(&FreeSans12pt7b);
+          tft.drawString(sub, SCREEN_W / 2, SCREEN_H / 2 + 34);
+          tft.setFreeFont(nullptr);
+
+          LOGF("[bl-test] kolo %d: GPIO%d = %s\n", round, (int)pin,
+               high ? "HIGH" : "LOW");
+          delay(4000);
+        }
+
+        // Pin zase pustit, at nedrzi neco, co k nemu nepatri.
+        pinMode(pin, INPUT);
+      }
+    }
+    LOGLN("[bl-test] hotovo - u ktereho GPIO se rozsvitilo?");
+  }
+#endif
 
   // LEDC az PO tft.init() - init() umi sahnout na TFT_BL a prepsal by to.
   blReady = ledcAttach(PIN_BACKLIGHT, BL_PWM_FREQ, BL_PWM_BITS);
-  if (blReady) ledcWrite(PIN_BACKLIGHT, BL_MAX);
-  else { pinMode(PIN_BACKLIGHT, OUTPUT); digitalWrite(PIN_BACKLIGHT, HIGH); }
+  blDuty  = BL_MAX;
+  blWrite(BL_MAX);
+  LOGF("[ui] podsviceni: %s, polarita %s\n",
+       blReady ? "PWM" : "napevno (LEDC selhalo)",
+       BL_ACTIVE_LOW ? "ACTIVE LOW" : "ACTIVE HIGH");
 
   Draw::begin();
 
@@ -354,6 +426,14 @@ void Ui::updateVolume(int volume, bool supported) {
   if (volume == lastVolume) return;
   lastVolume = volume;
   drawVolume(volume, supported);
+}
+
+void Ui::invalidateStatus() {
+  // Prekresleni cele stranky smaze i stavovy radek, ale updateStatus()
+  // o tom nevi a pri nezmenenych hodnotach by ho uz nevykreslil.
+  lastDevice[0] = '\0';
+  lastClock[0]  = '\0';
+  lastBars      = 255;
 }
 
 void Ui::setPageDots(uint8_t count, uint8_t active) {
@@ -598,25 +678,32 @@ int Ui::valueFromX(Hit h, int16_t x) {
 // ---------------------------------------------------------------------
 void Ui::dipBegin() {
   if (!blReady || blDipped) return;
-  blDipped = true;
-  // Rychly sjezd na ~55 % - dost na to, aby se prekresleni "schovalo",
-  // ale ne tak, aby to vypadalo jako vypnuty displej.
-  for (uint16_t d = blDuty; d > BL_MAX / 2; d -= 220) {
-    ledcWrite(PIN_BACKLIGHT, d);
+
+  // Stahnout na polovinu AKTUALNIHO jasu, ne na polovinu maxima. Kdyz uz
+  // je displej ztlumeny (necinnost, tma v mistnosti), stahnuti na
+  // polovinu maxima by ho naopak rozsvitilo.
+  uint16_t target = max<uint16_t>(blDuty / 2, BL_MIN);
+  if (target >= blDuty) return;         // neni co ztlumovat
+
+  blDipFrom = blDuty;
+  blDipped  = true;
+  for (uint16_t d = blDuty; d > target; d = (d > 220) ? d - 220 : target) {
+    blWrite(d);
     delayMicroseconds(900);
   }
-  ledcWrite(PIN_BACKLIGHT, BL_MAX / 2);
+  blWrite(target);
 }
 
 void Ui::dipEnd() {
   if (!blReady || !blDipped) return;
   blDipped = false;
-  for (uint16_t d = BL_MAX / 2; d < blTarget; d += 150) {
-    ledcWrite(PIN_BACKLIGHT, d);
+  uint16_t target = blDipFrom;
+  for (uint16_t d = max<uint16_t>(target / 2, BL_MIN); d < target; d += 150) {
+    blWrite(d);
     delayMicroseconds(700);
   }
-  ledcWrite(PIN_BACKLIGHT, blTarget);
-  blDuty = blTarget;
+  blWrite(target);
+  blDuty = target;
 }
 
 void Ui::setBacklight(uint16_t duty) {
@@ -637,9 +724,13 @@ void Ui::tickBacklight(uint32_t lastActivity) {
   static uint16_t ldrScale = 255;
   if (millis() - lastLdr > 1500) {
     lastLdr = millis();
-    int raw = analogRead(PIN_LDR);          // 0..4095
-    int lux = 4095 - raw;                   // vetsi = svetleji
-    ldrScale = (uint16_t)constrain(80 + lux * 175 / 4095, 80, 255);
+    // Na CYD je fotorezistor mezi 3V3 a GPIO34 s odporem k zemi,
+    // takze vic svetla = vetsi napeti = vetsi hodnota z ADC.
+    int raw = analogRead(PIN_LDR);          // 0..4095, vetsi = svetleji
+    #if LDR_INVERTED
+      raw = 4095 - raw;
+    #endif
+    ldrScale = (uint16_t)constrain(80 + raw * 175 / 4095, 80, 255);
   }
   want = (uint16_t)((uint32_t)want * ldrScale / 255);
   #endif
@@ -651,7 +742,7 @@ void Ui::tickBacklight(uint32_t lastActivity) {
   if (blDuty == blTarget) return;
   if (blDuty < blTarget) blDuty = min<uint16_t>(blTarget, blDuty + BL_FADE_STEP);
   else                   blDuty = max<uint16_t>(blTarget, blDuty - BL_FADE_STEP);
-  ledcWrite(PIN_BACKLIGHT, blDuty);
+  blWrite(blDuty);
 }
 
 // ---------------------------------------------------------------------
@@ -674,6 +765,15 @@ void Ui::clearToast() {
 void Ui::setLed(uint32_t rgb888) {
 #if FEAT_RGB_LED
   if (!ledOk) return;
+
+  // LED je ACTIVE LOW, takze zhasnuto = strida 255. Bez teto vetve by
+  // se cerna prohnala pres fromHsv() a skoncila jako tlumene cervena.
+  if (rgb888 == 0) {
+    ledcWrite(PIN_LED_R, 255);
+    ledcWrite(PIN_LED_G, 255);
+    ledcWrite(PIN_LED_B, 255);
+    return;
+  }
   // Plne rozsvicena LED je pri pohledu ze predu oslnujici - stahneme ji
   // na petinu a jeste ji normalizujeme, aby byla poznat barva a ne jas.
   Col::Hsv h = Col::toHsv(rgb888);
