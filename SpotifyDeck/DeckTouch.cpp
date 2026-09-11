@@ -222,6 +222,20 @@ TouchEvent Touch::poll() {
   TouchEvent ev;
 
   uint32_t now = millis();
+
+  // Dlouhy stisk se musi vyhodnotit i mimo vzorkovaci okno. Kdyz pres
+  // nej probehne blokujici dotaz na sit (klidne sekundu), prah by se
+  // jinak prekrocil bez povsimnuti a gesto by doslo jako klepnuti.
+  if (g_down && !g_longFired && !g_dragging &&
+      (now - g_downAt) > TOUCH_LONGPRESS_MS) {
+    g_longFired  = true;
+    ev.longPress = true;
+    ev.down      = true;
+    ev.x = g_lastX; ev.y = g_lastY;
+    ev.startX = g_startX; ev.startY = g_startY;
+    return ev;
+  }
+
   if (now - g_lastSample < 12) {
     // Mezi vzorky jen zopakujeme aktualni stav, at volajici nemusi
     // resit, jak casto poll() vola.

@@ -104,7 +104,14 @@ Http::Result Http::getJson(const String& url, JsonDocument& doc,
   String payload = http.getString();
   http.end();
 
-  if (payload.isEmpty()) { r.code = 204; return r; }
+  if (payload.isEmpty()) {
+    // Prazdne telo u kodu 200 neni "nic k zobrazeni" - je to selhane
+    // cteni (nejcasteji dosla halda pri reserve() v getString).
+    // Rozlisit to je dulezite: jinak by se to tvarilo jako "nic nehraje".
+    setError("prazdna odpoved u HTTP 200");
+    r.code = -102;
+    return r;
+  }
 
   DeserializationError err =
       filter ? deserializeJson(doc, payload, DeserializationOption::Filter(*filter))
@@ -133,6 +140,13 @@ Http::Result Http::getText(const String& url, String& out, size_t maxLen) {
       r.code = -101;
     } else {
       out = http.getString();
+      // Pri chunked prenosu server delku nehlasi (size == -1), takze
+      // strop musi platit i zpetne - jinak by sel obejit.
+      if (out.length() > maxLen) {
+        setError("odpoved je moc velka (%u B)", (unsigned)out.length());
+        out = "";
+        r.code = -101;
+      }
     }
   } else if (r.code < 0) {
     setError("sit: %s", http.errorToString(r.code).c_str());

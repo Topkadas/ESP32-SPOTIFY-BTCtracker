@@ -19,6 +19,7 @@ String   refreshToken;
 String   authHeader;              // "Bearer ..." - skládá se jen pri zmene tokenu
 uint32_t tokenExpiresAt = 0;      // millis()
 uint32_t rateLimitUntil = 0;      // millis()
+bool     rateLimited    = false;  // viz timeReached() nize
 bool     reauthNeeded   = false;
 char     errorMsg[80]   = {0};
 
@@ -47,9 +48,21 @@ void copyRaw(char* dst, size_t cap, const char* src) {
   dst[cap - 1] = '\0';
 }
 
-// millis()-bezpecne porovnani (funguje i pres pretecení po ~49 dnech)
+// millis()-bezpecne porovnani (funguje i pres pretecení po ~49 dnech).
+//
+// Pozor: je to bezpecne jen proti terminu, ktery sam vznikl z nedavneho
+// millis(). Nula jako "zadny termin" tady NEFUNGUJE - vyraz se pak
+// zvrhne na (int32_t)millis() >= 0, coz je od 24,9. do 49,7. dne behu
+// nepravda. Proto se "zadny termin" pozna zvlast booleanem.
 inline bool timeReached(uint32_t deadline) {
   return (int32_t)(millis() - deadline) >= 0;
+}
+
+// Plati rate limit? Kdyz uz vyprsel, rovnou se priznak zhasne.
+inline bool rateLimitActive() {
+  if (!rateLimited) return false;
+  if (timeReached(rateLimitUntil)) { rateLimited = false; return false; }
+  return true;
 }
 
 String urlEncode(const String& s) {
@@ -72,12 +85,13 @@ String urlEncode(const String& s) {
 void noteRateLimit(const Http::Result& r) {
   int secs = r.retryAfter > 0 ? r.retryAfter : 30;
   rateLimitUntil = millis() + (uint32_t)secs * 1000UL;
+  rateLimited    = true;
   setError("Rate limit, cekam %d s", secs);
 }
 
 int sendCommand(const char* verb, const String& path) {
   if (WiFi.status() != WL_CONNECTED)  return -1;
-  if (!timeReached(rateLimitUntil))   return 429;
+  if (rateLimitActive())              return 429;
   if (!Spotify::ensureToken())        return 401;
 
   Http::Result r = Http::command(verb, String(API) + path, authHeader.c_str());
@@ -227,7 +241,7 @@ bool Spotify::ensureToken() {
 
 PollResult Spotify::poll(PlayerState& out) {
   if (WiFi.status() != WL_CONNECTED) return PollResult::NoNetwork;
-  if (!timeReached(rateLimitUntil))  return PollResult::RateLimited;
+  if (rateLimitActive())             return PollResult::RateLimited;
   if (!ensureToken())
     return reauthNeeded ? PollResult::AuthFailed : PollResult::Error;
 

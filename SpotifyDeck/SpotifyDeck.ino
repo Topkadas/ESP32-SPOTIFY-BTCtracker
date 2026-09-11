@@ -302,17 +302,27 @@ void pollActivePage() {
       pollSpotify();
       break;
 
-    case Page::Weather:
-      Weather::poll();
+    case Page::Weather: {
+      // Prekreslovat jen kdyz dotaz opravdu prinesl nova data. Drive se
+      // po prejeti na stranku kreslila cela plocha dvakrat - jednou ze
+      // switchPage() a hned znovu z prvniho dotazu - vcetne dvou
+      // ztlumeni podsviceni za sebou.
+      static bool wxDrawn = false;
+      bool fresh = Weather::poll();
       g_nextPoll[i] = millis() + max<uint32_t>(Weather::nextPollDelay(), 1000);
-      drawPage(true);
+      // Kdyz dotaz selhal, prekreslit stejne - ale jen jednou, aby byla
+      // videt chybova hlaska misto vecneho "nacitam".
+      if (fresh || !wxDrawn) { drawPage(true); wxDrawn = true; }
       break;
+    }
 
-    case Page::Crypto:
-      Crypto::poll();
+    case Page::Crypto: {
+      static bool btcDrawn = false;
+      bool fresh = Crypto::poll();
       g_nextPoll[i] = millis() + max<uint32_t>(Crypto::nextPollDelay(), 1000);
-      drawPage(true);
+      if (fresh || !btcDrawn) { drawPage(true); btcDrawn = true; }
       break;
+    }
 
     case Page::Clock:
       g_nextPoll[i] = millis() + 60000;      // hodiny nic nestahuji

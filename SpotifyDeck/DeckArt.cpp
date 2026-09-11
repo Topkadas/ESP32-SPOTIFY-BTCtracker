@@ -33,6 +33,17 @@ uint32_t g_bgBottom = Col::rgb(0x05, 0x07, 0x0C);
 // obaly nezcernaly uplne.
 uint16_t g_bgGain = 130;
 
+// Paleta spocitana z obalu alba se drzi zvlast. Ostatni stranky si
+// prebijeji "zive" hodnoty pres setFlatPalette(), a bez teto zalohy by
+// se barva odvozena z obalu uz nikdy nevratila - Art::load() se totiz
+// pri nezmenenem obalu hned vraci a znovu ji nepocita.
+uint32_t g_artDominant = 0;
+uint32_t g_artAccent   = 0;
+uint32_t g_artBgTop    = 0;
+uint32_t g_artBgBottom = 0;
+uint16_t g_artBgGain   = 130;
+bool     g_artPalette  = false;
+
 bool g_fsReady  = false;
 bool g_useArt   = true;    // false = hladky prechod misto rozmazaneho obalu
 
@@ -164,6 +175,13 @@ void computePalette() {
   if (avgLuma < 1) avgLuma = 1;
   int gain = 255 * BG_TARGET_LUMA / avgLuma;
   g_bgGain = (uint16_t)constrain(gain, 45, 200);
+
+  g_artDominant = g_dominant;
+  g_artAccent   = g_accent;
+  g_artBgTop    = g_bgTop;
+  g_artBgBottom = g_bgBottom;
+  g_artBgGain   = g_bgGain;
+  g_artPalette  = true;
 
   LOGF("[art] dominant=%06X accent=%06X avgLuma=%u gain=%u\n",
        (unsigned)g_dominant, (unsigned)g_accent, avgLuma, g_bgGain);
@@ -358,6 +376,7 @@ void Art::unload() {
   g_bgTop    = Col::rgb(0x12, 0x1C, 0x30);
   g_bgBottom = Col::rgb(0x05, 0x07, 0x0C);
   g_bgGain   = 130;
+  g_artPalette = false;
 }
 
 bool Art::load(const char* artId, const char* url) {
@@ -389,13 +408,29 @@ bool Art::load(const char* artId, const char* url) {
   g_id[sizeof(g_id) - 1] = '\0';
 
   if (!decodeThumb()) {
-    LOGLN("[art] nahled se nepodaril, jedeme bez pozadi");
+    // Bez nahledu neni ani paleta, ani rozmazane pozadi. Zahodime i id,
+    // aby to priste zkusilo znovu - jinak by zkratka na shodne id tuhle
+    // chybu u daneho alba zakonzervovala.
+    LOGLN("[art] nahled se nepodaril, zahazuji obal");
+    g_id[0] = '\0';
     g_tw = g_th = 0;
+    return false;
   }
   return true;
 }
 
-void Art::useArtBackground(bool on) { g_useArt = on; }
+void Art::useArtBackground(bool on) {
+  g_useArt = on;
+  // Navrat na stranku Spotify musi obnovit i barvy z obalu, ne jen
+  // prepnout zdroj pozadi.
+  if (on && g_artPalette) {
+    g_dominant = g_artDominant;
+    g_accent   = g_artAccent;
+    g_bgTop    = g_artBgTop;
+    g_bgBottom = g_artBgBottom;
+    g_bgGain   = g_artBgGain;
+  }
+}
 
 void Art::setFlatPalette(uint32_t top, uint32_t bottom, uint32_t accent) {
   g_bgTop    = top;
