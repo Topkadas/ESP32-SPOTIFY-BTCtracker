@@ -137,28 +137,42 @@ void drawDigital(const struct tm& t, bool full) {
     lastSec = -1;
   }
 
-  if (strcmp(now, lastDigital) != 0) {
-    strncpy(lastDigital, now, sizeof(lastDigital) - 1);
-    Art::paintRect(0, 76, SCREEN_W, 76);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(Draw::cText);
-    // Font 7 je sedmisegmentovy - na velke hodiny sedi nejlip.
-    tft.drawString(now, SCREEN_W / 2, 112, 7);
-  }
-
-  // Vteriny mensim pismem a v akcentu
   char sec[4];
   snprintf(sec, sizeof(sec), "%02d", t.tm_sec);
-  Art::paintRect(SCREEN_W / 2 + 84, 116, 40, 26);
-  tft.setTextDatum(ML_DATUM);
-  tft.setTextColor(Draw::cAccent);
-  tft.drawString(sec, SCREEN_W / 2 + 88, 128, 4);
 
-  char date[32];
+  // Sirka se musi zmerit, ne odhadnout. Font 7 je sedmisegmentovy a jeho
+  // cislice jsou siroke - "14:32" i s vterinami se pri pevne zvolenych
+  // souradnicich lehce nevejde a konec se urizne.
+  int16_t wBig = tft.textWidth(now, 7);
+  int16_t wSec = tft.textWidth(sec, 4);
+  const int16_t GAP = 10;
+  const int16_t MARGIN = 10;
+
+  bool showSec = (wBig + GAP + wSec) <= (SCREEN_W - 2 * MARGIN);
+  int16_t total = showSec ? (wBig + GAP + wSec) : wBig;
+  int16_t left  = (SCREEN_W - total) / 2;
+  if (left < MARGIN) left = MARGIN;
+
+  // Cely pas najednou - vterina se meni kazdou sekundu a bez spolecneho
+  // mazani by za sebou nechavala zbytky.
+  Art::paintRect(0, 72, SCREEN_W, 82);
+
+  tft.setTextDatum(ML_DATUM);
+  tft.setTextColor(Draw::cText);
+  tft.drawString(now, left, 112, 7);
+
+  if (showSec) {
+    tft.setTextColor(Draw::cAccent);
+    tft.drawString(sec, left + wBig + GAP, 124, 4);
+  }
+  strncpy(lastDigital, now, sizeof(lastDigital) - 1);
+  lastDigital[sizeof(lastDigital) - 1] = '\0';
+
+  char date[40];
   snprintf(date, sizeof(date), "%s %d. %s %d", Lang::dayShort(t.tm_wday),
            t.tm_mday, Lang::monthShort(t.tm_mon), 1900 + t.tm_year);
-  Draw::text(40, 168, 240, 20, date, &FreeSans9pt7b, 0, Draw::cText2, 0,
-             TC_DATUM);
+  Draw::text(10, 166, SCREEN_W - 20, 22, date, &FreeSans9pt7b, 0,
+             Draw::cText2, 0, MC_DATUM);
 }
 
 }  // namespace

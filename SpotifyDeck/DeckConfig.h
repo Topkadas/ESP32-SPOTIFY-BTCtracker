@@ -12,8 +12,9 @@
 #define FEAT_FULLSCREEN_ART   1   // klepnuti na obal -> obal na celou obrazovku
 #define FEAT_VOLUME_SLIDER    1   // tazeni po hlasitosti
 #define FEAT_SEEK_BAR         1   // tazeni po progress baru = previjeni
-#define FEAT_AUTO_DIM         1   // ztlumeni podsviceni po necinnosti
-#define FEAT_LDR_BRIGHTNESS   1   // jas podle okolniho svetla (LDR na GPIO34)
+#define FEAT_AUTO_DIM         0   // ztlumeni podsviceni po necinnosti
+#define FEAT_LDR_BRIGHTNESS   0   // jas podle okolniho svetla (LDR na GPIO34)
+#define FEAT_REPAINT_DIP      0   // kratke stazeni jasu pri velkem prekresleni
 #define FEAT_RGB_LED          1   // RGB LED na desce sviti barvou alba
 #define FEAT_ART_CACHE        1   // cache obalu v LittleFS (rychlejsi prepinani)
 #define FEAT_NTP_CLOCK        1   // hodiny ve stavovem radku a na idle obrazovce

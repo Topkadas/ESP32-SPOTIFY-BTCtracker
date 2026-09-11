@@ -677,6 +677,9 @@ int Ui::valueFromX(Hit h, int16_t x) {
 //  Podsviceni
 // ---------------------------------------------------------------------
 void Ui::dipBegin() {
+#if !FEAT_REPAINT_DIP
+  return;                       // ztmavovani pri prekresleni je vypnute
+#endif
   if (!blReady || blDipped) return;
 
   // Stahnout na polovinu AKTUALNIHO jasu, ne na polovinu maxima. Kdyz uz
@@ -695,6 +698,9 @@ void Ui::dipBegin() {
 }
 
 void Ui::dipEnd() {
+#if !FEAT_REPAINT_DIP
+  return;
+#endif
   if (!blReady || !blDipped) return;
   blDipped = false;
   uint16_t target = blDipFrom;
