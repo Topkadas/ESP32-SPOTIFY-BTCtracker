@@ -5,7 +5,7 @@
 Čtyři stránky na jedné laciné desce s dotykovým displejem: **Spotify ovladač**,
 **počasí**, **kurz bitcoinu** a **analogové hodiny**. Přepíná se to tahem prstu.
 
-Běží na ESP32-2432S028R, známém jako **CYD — "Cheap Yellow Display"**.
+Běží na desce z rodiny **CYD — Cheap Yellow Display** (ESP32-2432S024 nebo -S028).
 Žádné pájení, žádné dráty, jedna deska a USB kabel.
 
 | | |
@@ -15,6 +15,35 @@ Běží na ESP32-2432S028R, známém jako **CYD — "Cheap Yellow Display"**.
 
 > Celé prostředí displeje je **česky i anglicky**. Dlouhý stisk → *Jazyk*.
 > Volba se ukládá do desky.
+
+---
+
+## Podporované desky
+
+Projekt běží na dvou deskách z rodiny „Cheap Yellow Display". Vypadají skoro stejně a mají
+shodně zapojený displej, ale ve třech věcech se liší — a když je nastavíš špatně, zůstane
+černá obrazovka nebo nefunguje dotyk.
+
+| | **ESP32-2432S024** (2,4") | **ESP32-2432S028** (2,8") |
+|---|---|---|
+| Podsvícení | **GPIO 27** | **GPIO 21** |
+| Dotyk (verze R) | XPT2046 **sdílí SPI s displejem**, `TOUCH_CS 33` | XPT2046 na **vlastní SPI** (SCK 25, MOSI 32, MISO 39, CS 33) |
+| Panel | potřebuje `TFT_INVERSION_ON` | bez inverze |
+| Piny displeje | MISO 12, MOSI 13, SCLK 14, CS 15, DC 2, RST −1 — **stejné** | stejné |
+
+Dvě nastavení spolu musí souhlasit a musí sedět na tvoji desku:
+
+- `DECK_BOARD` v [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h) — `24` nebo `28`
+- `CYD_BOARD` v [`User_Setup.h`](User_Setup.h) — stejné číslo
+
+**Nevíš, kterou desku máš?** Nastav v `DeckConfig.h` `BL_SELFTEST` na `3` a nahraj. Deska po
+startu projede kandidáty na pin podsvícení, každý na 2,5 s podrží HIGH a pak LOW, a přitom
+píše a kreslí, který zrovna zkouší. Ten, u kterého se displej rozsvítí, je tvůj. Pak vrať
+`BL_SELFTEST` na `0`.
+
+Verze **-C** obou desek mají místo toho kapacitní CST820 na I²C, který tenhle firmware zatím
+neumí. `TOUCH_PROBE 1` v `DeckConfig.h` ti řekne, co máš: po startu prohledá I²C na CST820
+a pak SPI na XPT2046 a výsledek vypíše.
 
 ---
 
@@ -81,7 +110,7 @@ Běží na ESP32-2432S028R, známém jako **CYD — "Cheap Yellow Display"**.
 
 | Věc | Poznámka |
 |---|---|
-| Deska **ESP32-2432S028R** (CYD) | 2,8" 320×240, rezistivní dotyk |
+| Deska **CYD** | ESP32-2432S024 (2,4") nebo -S028 (2,8"), rezistivní dotyk |
 | **USB kabel, který umí data** | Nabíjecí kabel se nepřihlásí jako port |
 | **Spotify Premium** | Ovládání přehrávání jde jen s Premium |
 | Arduino IDE | verze 2.x |
@@ -133,13 +162,13 @@ Dokumenty/Arduino/libraries/TFT_eSPI/User_Setup.h
 > změní se nastavení displeje i pro tvoje ostatní TFT_eSPI projekty.
 > Původní si radši nejdřív přejmenuj na `User_Setup.h.bak`.
 
-Když už máš CYD rozjetý a funguje ti, **nemusíš nic měnit** — projekt
-běží i na běžné konfiguraci s `ILI9341_DRIVER`. Přiložený soubor navíc
-přidává `USE_HSPI_PORT` (displej je fyzicky na HSPI, takže je to rychlejší)
-a `TFT_BL`.
+**Tenhle krok je povinný, ne volitelný.** Přiložený soubor nese pin podsvícení,
+inverzi barev a chip select dotyku pro tvoji desku. Bez něj dostaneš černou
+obrazovku, vybledlé barvy nebo nefunkční dotyk — a ani jedno není na první
+pohled zřejmé.
 
-**Máš dva USB konektory (micro + USB-C)?** Pak máš novější desku s řadičem
-**ST7789** — v `User_Setup.h` zakomentuj blok A a odkomentuj blok B.
+Nahoře v souboru nastav `CYD_BOARD` na `24` nebo `28` podle své desky a stejné
+číslo dej i do `DECK_BOARD` v `SpotifyDeck/DeckConfig.h`.
 
 ### 4. Spotify aplikace
 
@@ -230,6 +259,25 @@ Všechno laditelné je v [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h).
 
 Dál se tam dá změnit rozložení obrazovky (souřadnice všech prvků),
 intervaly dotazů, časové pásmo, jméno a heslo WiFi portálu.
+
+---
+
+### Vestavěná diagnostika
+
+Čtyři přepínače v [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h) tam jsou proto, že
+každý z nich stál jedno skutečné ladění:
+
+| Přepínač | K čemu je |
+|---|---|
+| `BL_SELFTEST` | Projede kandidáty na pin podsvícení, takže i z černé obrazovky poznáš, který pin tvoje deska používá. Hodnota = počet kol. |
+| `TOUCH_PROBE` | Po startu prohledá I²C na kapacitní CST820 a SPI na rezistivní XPT2046 a napíše, kterou variantu máš. |
+| `WIFI_FORGET` | Jednorázově zahodí uloženou WiFi a jde rovnou do portálu. **Pak to vrať na `0`**, jinak deska zapomene síť při každém restartu. |
+| `DECK_VERBOSE` | Výpis na Serial (115200), včetně seznamu všech WiFi sítí v dosahu se silou signálu a kanálem. |
+
+Deska taky hned po startu napíše, **proč se naposledy restartovala** (zapnutí, panic,
+watchdog, podpětí, nebo vlastní `ESP.restart()`). Když se něco nečekaně rebootuje, tenhle
+řádek ušetří spoustu hádání.
+
 
 ---
 
@@ -328,6 +376,10 @@ Bayerova matice 4×4 před zaokrouhlením je rozbije.
 | Počasí hlásí „misto nenalezeno" | Napiš město bez diakritiky, případně i se zemí („Praha") |
 | Po startu je bílá/černá obrazovka | Zkontroluj, že `User_Setup.h` je opravdu v `libraries/TFT_eSPI/` |
 | Občas problikne šum | V `User_Setup.h` sniž `SPI_FREQUENCY` na `40000000` |
+| **Černá obrazovka, ale deska naběhne** | Špatný pin podsvícení pro tvůj model. Nastav `BL_SELFTEST 3` v `DeckConfig.h`, nahraj a sleduj, u kterého pinu se rozsvítí |
+| Barvy jsou vybledlé / invertované | Přehoď `TFT_INVERSION_ON` v `User_Setup.h` |
+| Dotyk vůbec nereaguje | Nezkopírovaný `User_Setup.h`, nebo si `CYD_BOARD` a `DECK_BOARD` neodpovídají |
+| Deska zapomene WiFi při každém restartu | `WIFI_FORGET` je pořád `1` v `DeckConfig.h` |
 
 Sériový monitor na **115200 baud** vypisuje, co se děje — od WiFi přes
 tokeny až po velikosti stažených obalů.

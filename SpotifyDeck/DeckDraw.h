@@ -28,9 +28,15 @@ void refreshPalette();    // dopocita barvy z aktualniho pozadi
 // Jeden radek textu vykresleny pres pozadi z DeckArt.
 //   builtin = 0 -> pouzije se freeFont, jinak vestaveny font cislo N
 //   offset     -> posun textu doleva (bezici nazev)
+//   bgColor    -> 0 = vzit pozadi stranky z DeckArt (vychozi chovani).
+//                 Jinak se pouzije tahle plna barva. To je nutne vsude,
+//                 kde text lezi na sklenenem panelu nebo v grafu - jinak
+//                 by si pod sebe prekreslil nedotcene pozadi stranky
+//                 a v panelu by zustal svetly obdelnik.
 void text(int16_t x, int16_t y, int16_t w, int16_t h, const char* s,
           const GFXfont* freeFont, uint8_t builtin, uint16_t color,
-          int16_t offset = 0, uint8_t datum = ML_DATUM);
+          int16_t offset = 0, uint8_t datum = ML_DATUM,
+          uint16_t bgColor = 0);
 
 // Sirka textu v danem fontu.
 int16_t measure(const char* s, const GFXfont* freeFont, uint8_t builtin);

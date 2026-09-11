@@ -5,7 +5,7 @@
 Four pages on one cheap touchscreen board: a **Spotify remote**, **weather**,
 a **Bitcoin ticker** and an **analogue clock**. Swipe to switch between them.
 
-Runs on the ESP32-2432S028R, better known as the **CYD — "Cheap Yellow Display"**.
+Runs on a **CYD — "Cheap Yellow Display"** board (ESP32-2432S024 or -S028).
 No soldering, no wiring: one board and a USB cable.
 
 | | |
@@ -15,6 +15,35 @@ No soldering, no wiring: one board and a USB cable.
 
 > The whole on-screen interface is available in **Czech and English**.
 > Long-press anywhere → *Language*. The choice is stored on the device.
+
+---
+
+## Supported boards
+
+This runs on two members of the "Cheap Yellow Display" family. They look alike and share
+the same display wiring, but three things differ — and getting them wrong means a black
+screen or dead touch.
+
+| | **ESP32-2432S024** (2.4") | **ESP32-2432S028** (2.8") |
+|---|---|---|
+| Backlight | **GPIO 27** | **GPIO 21** |
+| Touch (R variant) | XPT2046 **sharing the display SPI bus**, `TOUCH_CS 33` | XPT2046 on **its own SPI bus** (SCK 25, MOSI 32, MISO 39, CS 33) |
+| Panel | needs `TFT_INVERSION_ON` | no inversion |
+| Display pins | MISO 12, MOSI 13, SCLK 14, CS 15, DC 2, RST −1 — **identical** | same |
+
+Two settings must agree with each other and with your board:
+
+- `DECK_BOARD` in [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h) — `24` or `28`
+- `CYD_BOARD` in [`User_Setup.h`](User_Setup.h) — the same number
+
+**Not sure which board you have?** Set `BL_SELFTEST` to `3` in `DeckConfig.h` and flash. On
+boot the board sweeps the candidate backlight pins, holding each one HIGH and then LOW for
+2.5 s while printing and drawing which pin it is trying. Whichever one lights the screen is
+yours. Set `BL_SELFTEST` back to `0` afterwards.
+
+The **-C** variants of either board use a capacitive CST820 on I²C instead, which this
+firmware does not drive yet. `TOUCH_PROBE 1` in `DeckConfig.h` tells you which one you have:
+on boot it probes I²C for the CST820 and then the SPI bus for an XPT2046, and prints the verdict.
 
 ---
 
@@ -82,7 +111,7 @@ No soldering, no wiring: one board and a USB cable.
 
 | Item | Note |
 |---|---|
-| An **ESP32-2432S028R** (CYD) board | 2.8" 320×240, resistive touch |
+| A **CYD** board | ESP32-2432S024 (2.4") or -S028 (2.8"), resistive touch |
 | A **USB cable that carries data** | A charge-only cable will not enumerate |
 | **Spotify Premium** | Playback control is Premium-only |
 | Arduino IDE | version 2.x |
@@ -134,12 +163,12 @@ Documents/Arduino/libraries/TFT_eSPI/User_Setup.h
 > configuration for every other TFT_eSPI project you have. Back up the original
 > as `User_Setup.h.bak` first.
 
-If your CYD already works, **you do not have to change anything** — the project
-runs fine on the usual `ILI9341_DRIVER` configuration. The bundled file merely
-adds `USE_HSPI_PORT` (the display really is on HSPI, so it is faster) and `TFT_BL`.
+**This step is mandatory, not optional.** The bundled file carries the backlight pin,
+the colour inversion and the touch chip-select for your board. Without it you get a
+black screen, washed-out colours, or dead touch — and none of those are obvious.
 
-**Two USB connectors (micro + USB-C)?** That is the newer board with an
-**ST7789** controller — in `User_Setup.h` comment out block A and uncomment block B.
+Set `CYD_BOARD` at the top of the file to `24` or `28` to match your board, and make
+`DECK_BOARD` in `SpotifyDeck/DeckConfig.h` the same number.
 
 ### 4. Spotify application
 
@@ -231,6 +260,25 @@ Everything tunable lives in [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.
 
 The same file holds the screen layout (coordinates of every element), poll
 intervals, timezone, and the WiFi portal's name and password.
+
+---
+
+### Built-in diagnostics
+
+Four switches in [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h) exist because each of
+them cost a real debugging session:
+
+| Switch | What it does |
+|---|---|
+| `BL_SELFTEST` | Sweeps candidate backlight pins so a black screen tells you which pin your board uses. Value = number of sweeps. |
+| `TOUCH_PROBE` | On boot, probes I²C for a capacitive CST820 and SPI for a resistive XPT2046, and prints which variant you have. |
+| `WIFI_FORGET` | One-shot: drops the stored WiFi credentials and goes straight to the portal. **Set it back to `0` afterwards** or the board forgets the network on every restart. |
+| `DECK_VERBOSE` | Serial logging at 115200, including a scan of every WiFi network in range with signal strength and channel. |
+
+The board also prints **why it last restarted** (power-on, panic, watchdog, brownout, or its
+own `ESP.restart()`) as the first line after boot. When something reboots unexpectedly, that
+line saves you the guessing.
+
 
 ---
 
@@ -330,6 +378,10 @@ before rounding removes them.
 | Weather says "place not found" | Type the town without accents, or add the country |
 | White/black screen after boot | Check that `User_Setup.h` really is in `libraries/TFT_eSPI/` |
 | Occasional noise on screen | Lower `SPI_FREQUENCY` to `40000000` in `User_Setup.h` |
+| **Black screen, but the board boots** | Wrong backlight pin for your model. Set `BL_SELFTEST 3` in `DeckConfig.h`, flash, and watch which pin lights it up |
+| Colours look washed out / inverted | Toggle `TFT_INVERSION_ON` in `User_Setup.h` |
+| Touch does nothing at all | `User_Setup.h` not copied, or `CYD_BOARD` / `DECK_BOARD` disagree |
+| Board forgets the WiFi on every restart | `WIFI_FORGET` is still `1` in `DeckConfig.h` |
 
 The serial monitor at **115200 baud** narrates everything — WiFi, tokens, and
 the size of each downloaded cover.

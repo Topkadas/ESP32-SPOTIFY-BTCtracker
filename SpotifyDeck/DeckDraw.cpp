@@ -63,9 +63,19 @@ namespace {
 
 // Naplni oblast spritu pozadim z DeckArt. Sprite si barvy drzi
 // s prohozenymi bajty, proto ten bswap.
-void spriteBackground(int16_t x, int16_t y, int16_t w, int16_t h) {
+void spriteBackground(int16_t x, int16_t y, int16_t w, int16_t h,
+                      uint16_t solid, bool useSolid) {
   uint16_t* buf = (uint16_t*)spr.getPointer();
   if (!buf) return;
+
+  if (useSolid) {
+    uint16_t v = __builtin_bswap16(solid);
+    for (int16_t row = 0; row < h; row++) {
+      uint16_t* dst = buf + (size_t)row * SPR_W;
+      for (int16_t i = 0; i < w; i++) dst[i] = v;
+    }
+    return;
+  }
 
   for (int16_t row = 0; row < h; row++) {
     Art::rowInto(rowTmp, x, y + row, w);
@@ -78,13 +88,13 @@ void spriteBackground(int16_t x, int16_t y, int16_t w, int16_t h) {
 
 void Draw::text(int16_t x, int16_t y, int16_t w, int16_t h, const char* s,
                 const GFXfont* freeFont, uint8_t builtin, uint16_t color,
-                int16_t offset, uint8_t datum) {
+                int16_t offset, uint8_t datum, uint16_t bgColor) {
   if (!sprOk) return;
   if (w > SPR_W) w = SPR_W;
   if (h > SPR_H) h = SPR_H;
   if (w <= 0 || h <= 0) return;
 
-  spriteBackground(x, y, w, h);
+  spriteBackground(x, y, w, h, bgColor, bgColor != 0);
 
   if (builtin) spr.setTextFont(builtin);
   else         spr.setFreeFont(freeFont);
