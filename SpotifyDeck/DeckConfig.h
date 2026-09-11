@@ -24,7 +24,7 @@
 //  0 = cesky, 1 = anglicky. Je to jen vychozi hodnota pri prvnim startu -
 //  pak se prepina primo na desce (dlouhy stisk -> Jazyk) a volba se
 //  uklada do NVS.
-#define DEFAULT_LANG_EN       0
+#define DEFAULT_LANG_EN       1
 
 // =====================================================================
 //  ORIENTACE
@@ -140,6 +140,11 @@
 // Kolik bajtu si nechat volnych, nez se pustime do stahovani obalu.
 #define ART_MIN_FREE_HEAP   45000
 #define ART_MAX_BYTES       72000     // 300x300 JPEG od Spotify byva 8-48 kB
+
+// Jednorazove: pri startu zapomenout ulozenou WiFi a jit rovnou do
+// portalu. Po uspesnem pripojeni vrat na 0, jinak deska zapomene sit
+// pri kazdem restartu.
+#define WIFI_FORGET           0
 
 // WiFi portal
 #define AP_NAME          "SpotifyDeck"

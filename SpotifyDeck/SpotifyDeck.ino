@@ -48,7 +48,10 @@
 // ---------------------------------------------------------------------
 //  Stranky
 // ---------------------------------------------------------------------
-enum class Page : uint8_t { Spotify = 0, Weather, Crypto, Clock, COUNT };
+// Poradi tady urcuje poradi stranek pri prejizdeni prstem i poradi
+// tecek ve stavovem radku. Da se libovolne prohodit, vsechno ostatni
+// se na stranky odkazuje jmenem, ne cislem.
+enum class Page : uint8_t { Spotify = 0, Crypto, Weather, Clock, COUNT };
 constexpr uint8_t PAGE_N = (uint8_t)Page::COUNT;
 
 Page     g_page = Page::Spotify;
@@ -690,6 +693,19 @@ void setup() {
   Serial.begin(115200);
   delay(200);
   LOGLN("\n=== SpotifyDeck ===");
+
+  // Duvod posledniho restartu. Kdyz se deska sama restartuje, tohle hned
+  // rekne, jestli to byl panic, watchdog, podpeti nebo nase vlastni
+  // ESP.restart() - jinak se to hada.
+  const char* reasons[] = {
+      "neznamy",    "zapnuti",        "externi reset",   "software",
+      "panic",      "watchdog (int)", "watchdog (task)", "watchdog (jiny)",
+      "deep sleep", "podpeti",        "SDIO"};
+  int r = (int)esp_reset_reason();
+  LOGF("[main] duvod restartu: %s (%d)\n",
+       (r >= 0 && r < (int)(sizeof(reasons) / sizeof(reasons[0]))) ? reasons[r]
+                                                                  : "?",
+       r);
 
   Lang::begin();           // jazyk prostredi nacteny z NVS
 

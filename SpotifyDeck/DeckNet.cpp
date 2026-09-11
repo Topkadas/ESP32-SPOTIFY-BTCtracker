@@ -15,10 +15,33 @@ char          g_cityResult[41]  = {0};
 bool          g_timeStarted = false;
 uint32_t      g_lastCheck   = 0;
 uint32_t      g_downSince   = 0;
+uint32_t      g_retryAt     = 0;
+uint32_t      g_backoffS    = 0;
 
 void say(const char* title, const char* detail) {
   if (g_status) g_status(title, detail);
   LOGF("[net] %s | %s\n", title, detail ? detail : "");
+}
+
+// Vypise, co deska ve vzduchu opravdu slysi. Kdyz v seznamu neni ta
+// sit, na kterou se ma pripojit, nema smysl resit heslo - bud je to
+// 5GHz pasmo, skryte SSID, nebo je router moc daleko.
+void scanAndLog() {
+#if DECK_VERBOSE
+  LOGLN("[net] skenuji site v dosahu...");
+  int n = WiFi.scanNetworks(false, true);    // sync, vcetne skrytych
+  if (n <= 0) {
+    LOGLN("[net] nenalezena zadna sit (ESP32 umi jen 2,4 GHz)");
+  } else {
+    for (int i = 0; i < n; i++) {
+      LOGF("[net]   %2d. %-28s  %4d dBm  kanal %2d  %s\n", i + 1,
+           WiFi.SSID(i).length() ? WiFi.SSID(i).c_str() : "(skryte)",
+           WiFi.RSSI(i), WiFi.channel(i),
+           WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "otevrena" : "heslo");
+    }
+  }
+  WiFi.scanDelete();
+#endif
 }
 
 void startTime() {
@@ -31,7 +54,9 @@ void startTime() {
 WiFiManagerParameter* g_cityParam = nullptr;
 
 void configurePortal(WiFiManager& wm) {
-  wm.setDebugOutput(false);
+  // Pri ladeni chceme videt, co WiFiManager dela - jinak je po
+  // "Pripojuji WiFi" na Serialu ticho a neni poznat, kde to vazne.
+  wm.setDebugOutput(DECK_VERBOSE ? true : false);
   wm.setDarkMode(true);
   wm.setTitle("SpotifyDeck");
   wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
@@ -70,10 +95,29 @@ void Net::begin(StatusFn status) {
   say(T(S_WIFI_CONNECTING),
       WiFi.SSID().length() ? WiFi.SSID().c_str() : T(S_WIFI_SEARCHING));
 
+  scanAndLog();
+
   WiFiManager wm;
   configurePortal(wm);
 
-  if (!wm.autoConnect(AP_NAME, AP_PASSWORD)) {
+#if WIFI_FORGET
+  // Jednorazove zahozeni ulozenych udaju - kdyz se deska porad marne
+  // pokousi o sit se spatnym heslem, je rychlejsi zacit od nuly.
+  LOGLN("[net] WIFI_FORGET: mazu ulozene pristupove udaje");
+  wm.resetSettings();
+  delay(300);
+#endif
+
+  LOGF("[net] ulozena sit: '%s'\n", WiFi.SSID().c_str());
+  LOGF("[net] spoustim autoConnect, AP '%s' / heslo '%s'\n",
+       AP_NAME, AP_PASSWORD);
+
+  bool ok = wm.autoConnect(AP_NAME, AP_PASSWORD);
+
+  LOGF("[net] autoConnect -> %s (status %d)\n", ok ? "OK" : "SELHALO",
+       (int)WiFi.status());
+
+  if (!ok) {
     say(T(S_WIFI_FAILED), T(S_RESTARTING));
     delay(1500);
     ESP.restart();
@@ -135,21 +179,32 @@ void Net::tick() {
   g_lastCheck = now;
 
   if (connected()) {
+    if (g_downSince) LOGLN("[net] WiFi zpatky");
     g_downSince = 0;
+    g_backoffS  = 0;
     startTime();
     return;
   }
 
   if (g_downSince == 0) {
     g_downSince = now;
+    g_retryAt   = now + 5000;
     LOGLN("[net] spojeni spadlo, zkousim znovu");
     WiFi.reconnect();
     return;
   }
 
-  // Po dvou minutach marneho pokouseni radeji cely stack restartovat.
-  if (now - g_downSince > 120000UL) {
-    LOGLN("[net] 2 minuty bez WiFi - restart");
-    ESP.restart();
+  // Drive se tady po dvou minutach restartovala cela deska. To je ale
+  // zbytecne tvrde - restart WiFi sam o sobe nic nespravi a uzivatel
+  // prijde o rozdelanou obrazovku i o cas z NTP. Misto toho se jen
+  // opakuje pokus o pripojeni, s rostouci prodlevou.
+  if ((int32_t)(now - g_retryAt) >= 0) {
+    uint32_t down = (now - g_downSince) / 1000;
+    g_backoffS = min<uint32_t>(g_backoffS ? g_backoffS * 2 : 5, 120);
+    g_retryAt  = now + g_backoffS * 1000UL;
+    LOGF("[net] bez WiFi uz %lu s, dalsi pokus za %lu s\n",
+         (unsigned long)down, (unsigned long)g_backoffS);
+    WiFi.disconnect();
+    WiFi.reconnect();
   }
 }

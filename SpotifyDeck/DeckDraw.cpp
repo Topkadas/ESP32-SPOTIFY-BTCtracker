@@ -20,7 +20,11 @@ uint16_t cBad     = 0xE986;
 
 namespace {
 
-constexpr int16_t SPR_W = 200;
+// Sprite musi byt siroky jako cely displej. Draw::text() si sirku orezava
+// na tuhle hodnotu, takze kazde uzsi reseni tise poskodi vsechny volajici,
+// kteri kresli sirsi radek - text se vycentruje vedle a konec predchoziho
+// retezce se nikdy nesmaze. 320 x 36 x 2 B = 23 kB haldy.
+constexpr int16_t SPR_W = SCREEN_W;
 constexpr int16_t SPR_H = 36;
 
 TFT_eSprite spr   = TFT_eSprite(&tft);
@@ -87,9 +91,16 @@ void Draw::text(int16_t x, int16_t y, int16_t w, int16_t h, const char* s,
   spr.setTextColor(color);
   spr.setTextDatum(datum);
 
+  // Text se vzdy sazi svisle na stred boxu (drawString dostava y = h/2),
+  // takze horni a dolni datum nedava smysl - glyfy by se kreslily pod
+  // spodni hranu spritu a orizly by se. Prevedeme je na stredove.
+  if      (datum == TL_DATUM || datum == BL_DATUM) datum = ML_DATUM;
+  else if (datum == TC_DATUM || datum == BC_DATUM) datum = MC_DATUM;
+  else if (datum == TR_DATUM || datum == BR_DATUM) datum = MR_DATUM;
+
   int16_t tx = -offset;
-  if (datum == TC_DATUM || datum == MC_DATUM || datum == BC_DATUM) tx = w / 2;
-  else if (datum == MR_DATUM || datum == TR_DATUM || datum == BR_DATUM) tx = w;
+  if      (datum == MC_DATUM) tx = w / 2;
+  else if (datum == MR_DATUM) tx = w;
 
   spr.drawString(s && *s ? s : "", tx, h / 2);
   spr.pushSprite(x, y, 0, 0, w, h);

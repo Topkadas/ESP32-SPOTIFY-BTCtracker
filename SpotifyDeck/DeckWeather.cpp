@@ -289,18 +289,21 @@ void fmtTemp(float t, char* out, size_t cap) {
 }
 
 void drawForecast() {
-  const int16_t y = 166;
-  const int16_t h = 68;
+  const int16_t y = 156;
+  const int16_t h = 78;
   for (int i = 0; i < 3; i++) {
     int16_t x = 10 + i * 100;
     int16_t w = 96;
     Draw::glass(x, y, w, h, 12, 118);
 
     uint16_t bg = Draw::cPanel;
-    Draw::text(x + 6, y + 4, w - 12, 16, g_days[i].label, nullptr, 2,
-               Draw::cText2, 0, TC_DATUM);
+    // Den nahore pres celou sirku, pod nim ikona vlevo a cisla vpravo.
+    // Ikona musi zustat mala (12 px) - pri vetsi uz se "21 / 12" v pisme 2
+    // do zbytku karty nevejde a konec se orizne.
+    Draw::text(x + 4, y + 3, w - 8, 15, g_days[i].label, nullptr, 2,
+               Draw::cText2, 0, MC_DATUM);
 
-    Icons::weather(x + 24, y + 38, 13, g_days[i].icon, true,
+    Icons::weather(x + 21, y + 44, 12, g_days[i].icon, true,
                    Draw::cText, Draw::cAccent, bg);
 
     char hi[8], lo[8];
@@ -308,13 +311,13 @@ void drawForecast() {
     fmtTemp(g_days[i].tmin, lo, sizeof(lo));
     char line[20];
     snprintf(line, sizeof(line), "%s / %s", hi, lo);
-    Draw::text(x + 44, y + 28, w - 48, 16, line, nullptr, 2, Draw::cText,
+    Draw::text(x + 36, y + 36, w - 40, 16, line, nullptr, 2, Draw::cText,
                0, ML_DATUM);
 
     if (g_days[i].pop > 0) {
       char pop[12];
       snprintf(pop, sizeof(pop), "%d%%", g_days[i].pop);
-      Draw::text(x + 44, y + 46, w - 48, 14, pop, nullptr, 2, Draw::cAccent,
+      Draw::text(x + 36, y + 54, w - 40, 14, pop, nullptr, 2, Draw::cAccent,
                  0, ML_DATUM);
     }
   }
@@ -337,31 +340,34 @@ void Weather::draw(bool full) {
     return;
   }
 
-  uint16_t bg = Art::pixelAt(60, 88);
-  Icons::weather(62, 88, 30, iconFor(g_code), g_isDay, Draw::cText,
+  uint16_t bg = Art::pixelAt(56, 74);
+  Icons::weather(56, 74, 30, iconFor(g_code), g_isDay, Draw::cText,
                  Draw::cAccent, bg);
 
+  // Teplota se sklada ze tri kusu: cislo, krouzek stupnu a "C". Krouzek
+  // musi jit az za skutecnou sirku cisla, jinak by u "-12" lezel na minusu.
   char t[8];
   fmtTemp(g_temp, t, sizeof(t));
-  Draw::bigText(120, 62, t, &FreeSansBold24pt7b, Draw::cText, TL_DATUM);
+  Draw::bigText(108, 42, t, &FreeSansBold24pt7b, Draw::cText, TL_DATUM);
 
   int16_t tw = Draw::measure(t, &FreeSansBold24pt7b, 0);
-  Draw::degree(120 + tw + 12, 66, 5, Draw::cText, bg);
-  Draw::bigText(120 + tw + 24, 62, "C", &FreeSansBold12pt7b, Draw::cText2,
+  int16_t degX = min<int16_t>(108 + tw + 10, (int16_t)(SCREEN_W - 36));
+  Draw::degree(degX, 48, 5, Draw::cText, bg);
+  Draw::bigText(degX + 10, 42, "C", &FreeSansBold12pt7b, Draw::cText2,
                 TL_DATUM);
 
-  Draw::text(120, 96, 190, 20, Lang::weather(g_code), &FreeSans9pt7b, 0,
-             Draw::cAccent);
-  Draw::text(120, 118, 190, 16, g_place, nullptr, 2, Draw::cText3);
+  Draw::text(108, 84, SCREEN_W - 122, 20, Lang::weather(g_code),
+             &FreeSans9pt7b, 0, Draw::cAccent);
+  Draw::text(108, 106, SCREEN_W - 122, 16, g_place, nullptr, 2, Draw::cText3);
 
   char detail[64];
   snprintf(detail, sizeof(detail), T(S_WX_FEELS_FMT),
            (int)lroundf(g_feels), g_humidity);
-  Draw::text(14, 134, 200, 16, detail, nullptr, 2, Draw::cText2);
+  Draw::text(14, 128, 196, 18, detail, nullptr, 2, Draw::cText2);
 
   char wind[40];
   snprintf(wind, sizeof(wind), T(S_WX_WIND_FMT), (int)lroundf(g_wind));
-  Draw::text(214, 134, 92, 16, wind, nullptr, 2, Draw::cText2, 0, MR_DATUM);
+  Draw::text(212, 128, 94, 18, wind, nullptr, 2, Draw::cText2, 0, MR_DATUM);
 
   drawForecast();
 }
