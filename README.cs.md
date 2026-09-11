@@ -10,8 +10,8 @@ Běží na desce z rodiny **CYD — Cheap Yellow Display** (ESP32-2432S024 nebo 
 
 | | |
 |---|---|
-| ![Spotify](docs/01-spotify.png) | ![Počasí](docs/02-pocasi.png) |
-| ![Bitcoin](docs/03-bitcoin.png) | ![Hodiny](docs/04-hodiny.png) |
+| ![Spotify](docs/01-spotify.png) | ![Bitcoin](docs/02-bitcoin.png) |
+| ![Počasí](docs/03-weather.png) | ![Hodiny](docs/04-clock.png) |
 
 > Celé prostředí displeje je **česky i anglicky**. Dlouhý stisk → *Jazyk*.
 > Volba se ukládá do desky.

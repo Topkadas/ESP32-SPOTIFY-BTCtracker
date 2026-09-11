@@ -10,8 +10,8 @@ No soldering, no wiring: one board and a USB cable.
 
 | | |
 |---|---|
-| ![Spotify](docs/01-spotify.png) | ![Weather](docs/02-pocasi.png) |
-| ![Bitcoin](docs/03-bitcoin.png) | ![Clock](docs/04-hodiny.png) |
+| ![Spotify](docs/01-spotify.png) | ![Bitcoin](docs/02-bitcoin.png) |
+| ![Weather](docs/03-weather.png) | ![Clock](docs/04-clock.png) |
 
 > The whole on-screen interface is available in **Czech and English**.
 > Long-press anywhere → *Language*. The choice is stored on the device.
