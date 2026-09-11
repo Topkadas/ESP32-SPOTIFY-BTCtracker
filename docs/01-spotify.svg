@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="260" viewBox="0 0 340 260">
+  <rect width="340" height="260" rx="12" fill="#131519"/>
+  <rect x="0.6" y="0.6" width="338.8" height="258.8" rx="11.4" fill="none" stroke="#E0A82E" stroke-width="1.2"/>
+  <svg x="10" y="10" width="320" height="240" viewBox="0 0 320 240" role="img"
+             aria-label="Obrazovka Spotify: rozmazany zeleny obal alba jako pozadi, ostry obal vlevo, nazev skladby 360 od Charli xcx vpravo, prubeh a ovladaci lista dole">
+          <defs>
+            <filter id="blur1" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="17"/>
+            </filter>
+            <linearGradient id="vig1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0"   stop-color="#000" stop-opacity="0"/>
+              <stop offset="1"   stop-color="#000" stop-opacity=".45"/>
+            </linearGradient>
+            <clipPath id="artclip"><rect x="14" y="26" width="150" height="150" rx="8"/></clipPath>
+          </defs>
+
+          <!-- rozmazany obal jako pozadi -->
+          <rect width="320" height="240" fill="#0A1206"/>
+          <g filter="url(#blur1)" opacity=".62">
+            <rect x="-20" y="-16" width="240" height="200" fill="#8ACF00"/>
+            <rect x="200" y="-16" width="140" height="272" fill="#5C8A00"/>
+            <rect x="-20" y="150" width="360" height="120" fill="#24400A"/>
+          </g>
+          <rect width="320" height="240" fill="url(#vig1)"/>
+
+          <!-- stavovy radek -->
+          <g fill="#CBD4E3">
+            <rect x="11" y="13" width="3" height="3"/><rect x="15" y="10" width="3" height="6"/>
+            <rect x="19" y="7"  width="3" height="9"/><rect x="23" y="4"  width="3" height="12"/>
+          </g>
+          <circle cx="143" cy="10" r="3"   fill="#FFFFFF"/>
+          <circle cx="154" cy="10" r="2"   fill="#FFFFFF" opacity=".38"/>
+          <circle cx="165" cy="10" r="2"   fill="#FFFFFF" opacity=".38"/>
+          <circle cx="176" cy="10" r="2"   fill="#FFFFFF" opacity=".38"/>
+          <text x="306" y="14" text-anchor="end" font-family="Verdana,DejaVu Sans,sans-serif"
+                font-size="11" fill="#CBD4E3">14:32</text>
+
+          <!-- ostry obal -->
+          <g clip-path="url(#artclip)">
+            <rect x="14" y="26" width="150" height="150" fill="#8ACF00"/>
+            <text x="89" y="112" text-anchor="middle" font-family="Arial,Helvetica,sans-serif"
+                  font-size="46" fill="#141414" opacity=".9">brat</text>
+          </g>
+          <rect x="13" y="25" width="152" height="152" rx="9" fill="none"
+                stroke="#FFFFFF" stroke-opacity=".34"/>
+
+          <!-- textovy sloupec -->
+          <text x="178" y="47"  font-family="Arial,Helvetica,sans-serif" font-size="19"
+                font-weight="bold" fill="#FFFFFF">360</text>
+          <text x="178" y="72"  font-family="Arial,Helvetica,sans-serif" font-size="13"
+                fill="#CBD4E3">Charli xcx</text>
+          <text x="178" y="95"  font-family="Verdana,sans-serif" font-size="11"
+                fill="#939FB4">brat</text>
+          <text x="178" y="117" font-family="Verdana,sans-serif" font-size="10"
+                fill="#939FB4">&gt; Kuchyne</text>
+
+          <!-- hlasitost -->
+          <g fill="#CBD4E3">
+            <rect x="180" y="150" width="4" height="8" rx="1"/>
+            <path d="M184 150 L190 145 L190 163 L184 158 Z"/>
+          </g>
+          <path d="M194 149 A7 7 0 0 1 194 159" fill="none" stroke="#CBD4E3" stroke-width="1.6"/>
+          <rect x="200" y="152" width="106" height="4" rx="2" fill="#FFFFFF" opacity=".26"/>
+          <rect x="200" y="152" width="66"  height="4" rx="2" fill="#FFFFFF"/>
+          <circle cx="266" cy="154" r="4" fill="#FFFFFF"/>
+
+          <!-- prubeh -->
+          <text x="14"  y="193" font-family="Verdana,sans-serif" font-size="11" fill="#CBD4E3">1:12</text>
+          <text x="306" y="193" text-anchor="end" font-family="Verdana,sans-serif" font-size="11"
+                fill="#939FB4">3:33</text>
+          <rect x="54" y="188" width="212" height="5" rx="2.5" fill="#FFFFFF" opacity=".26"/>
+          <rect x="54" y="188" width="70"  height="5" rx="2.5" fill="#B7F03A"/>
+          <circle cx="124" cy="190.5" r="5" fill="#FFFFFF"/>
+
+          <!-- ovladaci lista -->
+          <rect x="8" y="200" width="304" height="34" rx="15" fill="#000000" opacity=".42"/>
+          <rect x="8" y="200" width="304" height="1.2" rx="1" fill="#FFFFFF" opacity=".1"/>
+
+          <!-- shuffle -->
+          <g stroke="#CBD4E3" stroke-width="2.4" fill="none" stroke-linecap="round">
+            <path d="M27 222 H34 L43 213"/>
+            <path d="M27 212 H33 L37.5 216.5"/>
+            <path d="M39.5 218.5 L43 221.5"/>
+          </g>
+          <path d="M48 208.5 L40.5 210 L47 216 Z" fill="#CBD4E3"/>
+          <path d="M48 225.5 L40.5 224 L47 218 Z" fill="#CBD4E3"/>
+          <!-- predchozi -->
+          <path d="M108 209 L108 225 L97 217 Z" fill="#FFFFFF"/>
+          <rect x="91" y="209" width="3" height="17" rx="1.5" fill="#FFFFFF"/>
+          <!-- play / pause disk -->
+          <circle cx="160" cy="217" r="16" fill="#B7F03A"/>
+          <rect x="152" y="208" width="5" height="19" rx="2" fill="#0A0D12"/>
+          <rect x="163" y="208" width="5" height="19" rx="2" fill="#0A0D12"/>
+          <!-- dalsi -->
+          <path d="M212 209 L212 225 L223 217 Z" fill="#FFFFFF"/>
+          <rect x="226" y="209" width="3" height="17" rx="1.5" fill="#FFFFFF"/>
+          <!-- repeat -->
+          <g stroke="#B7F03A" stroke-width="2.4" fill="none" stroke-linecap="round">
+            <path d="M274 210.5 H286"/><path d="M274 210.5 V215"/>
+            <path d="M290 223.5 H278"/><path d="M290 223.5 V219"/>
+          </g>
+          <path d="M291.5 210.5 L285.5 206.5 L285.5 214.5 Z" fill="#B7F03A"/>
+          <path d="M272.5 223.5 L278.5 219.5 L278.5 227.5 Z" fill="#B7F03A"/>
+          <circle cx="282" cy="229" r="2" fill="#B7F03A"/>
+        </svg>
+</svg>

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="260" viewBox="0 0 340 260">
+  <rect width="340" height="260" rx="12" fill="#131519"/>
+  <rect x="0.6" y="0.6" width="338.8" height="258.8" rx="11.4" fill="none" stroke="#E0A82E" stroke-width="1.2"/>
+  <svg x="10" y="10" width="320" height="240" viewBox="0 0 320 240" role="img"
+             aria-label="Obrazovka s kurzem bitcoinu: cena, zmena za 24 hodin a graf za 48 hodin">
+          <defs>
+            <linearGradient id="btcbg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0D3A2A"/>
+              <stop offset="1" stop-color="#04060A"/>
+            </linearGradient>
+            <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3FD67A" stop-opacity=".55"/>
+              <stop offset="1" stop-color="#3FD67A" stop-opacity=".05"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="240" fill="url(#btcbg)"/>
+
+          <g fill="#CBD4E3">
+            <rect x="11" y="13" width="3" height="3"/><rect x="15" y="10" width="3" height="6"/>
+            <rect x="19" y="7"  width="3" height="9"/><rect x="23" y="4"  width="3" height="12"/>
+          </g>
+          <circle cx="143" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="154" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="165" cy="10" r="3" fill="#FFFFFF"/>
+          <circle cx="176" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <text x="306" y="14" text-anchor="end" font-family="Verdana,sans-serif"
+                font-size="11" fill="#CBD4E3">14:32</text>
+
+          <text x="14"  y="42" font-family="Verdana,sans-serif" font-size="11"
+                fill="#939FB4" letter-spacing="1">BITCOIN</text>
+          <text x="306" y="42" text-anchor="end" font-family="Verdana,sans-serif"
+                font-size="11" fill="#3FD67A">BTC / USD</text>
+
+          <text x="14" y="90" font-family="Arial,Helvetica,sans-serif" font-size="42"
+                font-weight="bold" fill="#FFFFFF">104 250</text>
+
+          <!-- stitek se zmenou -->
+          <rect x="14" y="100" width="92" height="24" rx="12" fill="#3FD67A" opacity=".25"/>
+          <path d="M28 106 L34 116 L22 116 Z" fill="#3FD67A"/>
+          <text x="40" y="117" font-family="Verdana,sans-serif" font-size="12"
+                fill="#3FD67A">2.34 %</text>
+
+          <!-- graf -->
+          <rect x="10" y="122" width="300" height="84" rx="12" fill="#000" opacity=".34"/>
+          <path d="M14 186 L30 180 L46 188 L62 170 L78 176 L94 158 L110 164 L126 150
+                   L142 156 L158 142 L174 150 L190 138 L206 144 L222 132 L238 140
+                   L254 128 L270 134 L286 126 L302 130 L302 198 L14 198 Z"
+                fill="url(#area)"/>
+          <path d="M14 186 L30 180 L46 188 L62 170 L78 176 L94 158 L110 164 L126 150
+                   L142 156 L158 142 L174 150 L190 138 L206 144 L222 132 L238 140
+                   L254 128 L270 134 L286 126 L302 130"
+                fill="none" stroke="#3FD67A" stroke-width="2" stroke-linejoin="round"/>
+          <circle cx="302" cy="130" r="3" fill="#FFFFFF"/>
+          <text x="16" y="134" font-family="Verdana,sans-serif" font-size="9"
+                fill="#939FB4">105 900</text>
+          <text x="16" y="200" font-family="Verdana,sans-serif" font-size="9"
+                fill="#939FB4">99 480</text>
+
+          <!-- paticka -->
+          <rect x="10" y="204" width="300" height="30" rx="10" fill="#000" opacity=".34"/>
+          <text x="20"  y="223" font-family="Verdana,sans-serif" font-size="11"
+                fill="#CBD4E3">24h max  105 900</text>
+          <text x="166" y="223" font-family="Verdana,sans-serif" font-size="11"
+                fill="#CBD4E3">24h min  99 480</text>
+          <text x="300" y="223" text-anchor="end" font-family="Verdana,sans-serif"
+                font-size="11" fill="#939FB4">14:31</text>
+        </svg>
+</svg>

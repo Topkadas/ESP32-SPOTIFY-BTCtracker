@@ -5,6 +5,7 @@
 #include <XPT2046_Touchscreen.h>
 
 #include "DeckConfig.h"
+#include "DeckLang.h"
 #include "DeckTft.h"
 
 namespace {
@@ -230,7 +231,7 @@ bool Touch::calibrate() {
     tft.setTextDatum(MC_DATUM);
     tft.setFreeFont(&FreeSans9pt7b);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("Klepni presne do stredu terce",
+    tft.drawString(T(S_CAL_PROMPT),
                    SCREEN_W / 2, SCREEN_H / 2 - 12);
     tft.drawString(i == 0 ? "1 / 2" : "2 / 2", SCREEN_W / 2, SCREEN_H / 2 + 12);
     drawTarget(px[i], py[i], TFT_GREENYELLOW);
@@ -278,7 +279,7 @@ bool Touch::calibrate() {
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(MC_DATUM);
   tft.setTextColor(TFT_GREENYELLOW, TFT_BLACK);
-  tft.drawString("Kalibrace ulozena", SCREEN_W / 2, SCREEN_H / 2);
+  tft.drawString(T(S_CAL_SAVED), SCREEN_W / 2, SCREEN_H / 2);
   delay(900);
   return true;
 }

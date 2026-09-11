@@ -36,6 +36,7 @@
 #include "DeckCrypto.h"
 #include "DeckDraw.h"
 #include "DeckHttp.h"
+#include "DeckLang.h"
 #include "DeckNet.h"
 #include "DeckSpotify.h"
 #include "DeckTft.h"
@@ -102,11 +103,11 @@ void drawSpotify(bool full) {
     case Sub::FullArt:    Ui::fullArt(g_state);          break;
     case Sub::Reauth:     Ui::reauth();                  break;
     case Sub::Error:
-      Ui::error("Spotify nedostupne", Spotify::lastError());
+      Ui::error(T(S_SPOTIFY_DOWN), Spotify::lastError());
       break;
     case Sub::Idle:
     default:
-      Ui::idle("Nic se neprehrava", "spust hudbu na telefonu nebo v pocitaci");
+      Ui::idle(T(S_NOTHING_PLAYING), T(S_START_MUSIC));
       break;
   }
   applyLed();
@@ -157,7 +158,7 @@ void showIdleSub(const char* detail) {
   g_sub = Sub::Idle;
   g_shownTrack[0] = g_shownArt[0] = '\0';
   if (g_page == Page::Spotify) {
-    Ui::idle("Nic se neprehrava", detail);
+    Ui::idle(T(S_NOTHING_PLAYING), detail);
     applyLed();
   }
 }
@@ -188,7 +189,7 @@ void pollSpotify() {
 
       if (!fresh.hasTrack) {
         g_state = fresh;
-        showIdleSub("reklama nebo neznamy obsah");
+        showIdleSub(T(S_AD_OR_UNKNOWN));
         break;
       }
 
@@ -228,7 +229,7 @@ void pollSpotify() {
       g_lastPollAt = millis();
       g_haveState  = false;
       g_state      = PlayerState();
-      showIdleSub("spust hudbu na telefonu nebo v pocitaci");
+      showIdleSub(T(S_START_MUSIC));
       break;
 
     case PollResult::AuthFailed:
@@ -239,16 +240,15 @@ void pollSpotify() {
       break;
 
     case PollResult::Forbidden:
-      showErrorSub("Chybi Premium",
-                   "ovladani prehravani vyzaduje Spotify Premium");
+      showErrorSub(T(S_PREMIUM_TITLE), T(S_PREMIUM_DETAIL));
       break;
 
     case PollResult::RateLimited:
-      Ui::toast("Spotify: moc dotazu");
+      Ui::toast(T(S_RATE_LIMITED));
       break;
 
     case PollResult::NoNetwork:
-      showErrorSub("Bez WiFi", "zkousim se pripojit zpatky");
+      showErrorSub(T(S_NO_WIFI), T(S_RECONNECTING));
       break;
 
     case PollResult::Error:
@@ -326,14 +326,14 @@ void runCommand(Hit h) {
       break;
 
     case Hit::Next:
-      Ui::toast("dalsi skladba");
+      Ui::toast(T(S_NEXT_TRACK));
       Spotify::next();
       break;
 
     case Hit::Prev:
       // Spotify chape "predchozi" jako skok na zacatek, kdyz uz skladba
       // chvili hraje - stejne jako mobilni aplikace.
-      Ui::toast("predchozi skladba");
+      Ui::toast(T(S_PREV_TRACK));
       Spotify::previous();
       break;
 
@@ -389,14 +389,19 @@ void openSettings() {
 
     case Ui::SettingsAction::WifiPortal:
       Net::setCityDefault(Weather::place());
-      Ui::bootStatus("Otevirám portal", "pripoj se na WiFi SpotifyDeck");
+      Ui::bootStatus(T(S_PORTAL_OPENING), T(S_PORTAL_JOIN));
       Net::startPortal(Ui::bootStatus);
       applyCityFromPortal();
       break;
 
+    case Ui::SettingsAction::Language:
+      // Prepnuti jazyka se projevi az pri prekresleni na konci funkce.
+      Lang::toggle();
+      break;
+
     case Ui::SettingsAction::ClearCache:
       Art::unload();
-      Ui::bootStatus("Cache", "mazu ulozene obaly...");
+      Ui::bootStatus("Cache", T(S_CACHE_CLEARING));
       LittleFS.format();
       delay(400);
       ESP.restart();
@@ -466,11 +471,11 @@ void handleSpotifyRelease(const TouchEvent& ev) {
         Spotify::setVolume(v);
         g_state.volume = v;
         char msg[24];
-        snprintf(msg, sizeof(msg), "hlasitost %d %%", v);
+        snprintf(msg, sizeof(msg), T(S_VOLUME_FMT), v);
         Ui::toast(msg);
         pollSoon();
       } else if (!g_state.supportsVolume) {
-        Ui::toast("zarizeni hlasitost neumi");
+        Ui::toast(T(S_NO_VOLUME));
       }
 #endif
       break;
@@ -577,6 +582,7 @@ void setup() {
   delay(200);
   LOGLN("\n=== SpotifyDeck ===");
 
+  Lang::begin();           // jazyk prostredi nacteny z NVS
   Touch::begin();          // nacte otoceni z NVS jeste pred inicializaci TFT
   Ui::begin();
   Ui::splash();
@@ -590,13 +596,13 @@ void setup() {
   Net::begin(Ui::bootStatus);
   applyCityFromPortal();
 
-  Ui::bootStatus("Prihlasuji ke Spotify", "");
+  Ui::bootStatus(T(S_SPOTIFY_SIGNIN), "");
   Spotify::begin();
   if (!Spotify::ensureToken() && Spotify::needsReauth()) g_sub = Sub::Reauth;
 
   // Prvni spusteni bez kalibrace - nabidnout ji rovnou.
   if (!Touch::hasCalibration()) {
-    Ui::bootStatus("Kalibrace dotyku", "za chvili klepni na terce");
+    Ui::bootStatus(T(S_CAL_TITLE), T(S_CAL_SOON));
     delay(1200);
     Touch::calibrate();
   }

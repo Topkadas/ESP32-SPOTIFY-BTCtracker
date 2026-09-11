@@ -7,6 +7,7 @@
 #include "DeckArt.h"
 #include "DeckColor.h"
 #include "DeckConfig.h"
+#include "DeckLang.h"
 #include "DeckDraw.h"
 #include "DeckHttp.h"
 #include "DeckIcons.h"
@@ -67,42 +68,7 @@ WxIcon iconFor(int code) {
   }
 }
 
-// Bez diakritiky - fonty displeje umi jen ASCII.
-const char* describe(int code) {
-  switch (code) {
-    case 0:  return "jasno";
-    case 1:  return "skoro jasno";
-    case 2:  return "polojasno";
-    case 3:  return "zatazeno";
-    case 45: return "mlha";
-    case 48: return "namrzajici mlha";
-    case 51: return "slabe mrholeni";
-    case 53: return "mrholeni";
-    case 55: return "huste mrholeni";
-    case 56:
-    case 57: return "namrzajici mrholeni";
-    case 61: return "slaby dest";
-    case 63: return "dest";
-    case 65: return "vydatny dest";
-    case 66:
-    case 67: return "mrznouci dest";
-    case 71: return "slabe snezeni";
-    case 73: return "snezeni";
-    case 75: return "huste snezeni";
-    case 77: return "snehove krupky";
-    case 80: return "prehanky";
-    case 81: return "silne prehanky";
-    case 82: return "pritrze";
-    case 85: return "snehove prehanky";
-    case 86: return "silne snezeni";
-    case 95: return "bourka";
-    case 96:
-    case 99: return "bourka s krupobitim";
-    default: return "-";
-  }
-}
-
-const char* DAY_LABELS[7] = {"Ne", "Po", "Ut", "St", "Ct", "Pa", "So"};
+// Slovni popis pocasi je v obou jazycich v DeckLang - viz Lang::weather().
 
 // Z data "2026-09-12" udela zkratku dne v tydnu (Zellerova kongruence).
 void weekdayOf(const char* iso, char* out, size_t cap) {
@@ -115,7 +81,7 @@ void weekdayOf(const char* iso, char* out, size_t cap) {
   int k = y % 100, j = y / 100;
   int h = (d + (13 * (m + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
   int dow = (h + 6) % 7;               // 0 = nedele
-  strncpy(out, DAY_LABELS[dow], cap - 1);
+  strncpy(out, Lang::dayShort(dow), cap - 1);
   out[cap - 1] = '\0';
 }
 
@@ -147,13 +113,13 @@ bool geocode() {
   JsonDocument doc;
   Http::Result r = Http::getJson(url, doc, &filter);
   if (!r.ok()) {
-    snprintf(g_error, sizeof(g_error), "geokodovani: HTTP %d", r.code);
+    snprintf(g_error, sizeof(g_error), T(S_WX_GEOCODE_FMT), r.code);
     return false;
   }
 
   JsonVariantConst first = doc["results"][0];
   if (first.isNull()) {
-    snprintf(g_error, sizeof(g_error), "misto '%s' nenalezeno", g_place);
+    snprintf(g_error, sizeof(g_error), T(S_WX_NOTFOUND_FMT), g_place);
     return false;
   }
 
@@ -238,7 +204,7 @@ bool Weather::poll() {
   JsonDocument doc;
   Http::Result r = Http::getJson(String(url), doc, &filter);
   if (!r.ok()) {
-    snprintf(g_error, sizeof(g_error), "pocasi: HTTP %d", r.code);
+    snprintf(g_error, sizeof(g_error), T(S_WX_HTTP_FMT), r.code);
     g_nextDelay = 60000;
     return false;
   }
@@ -267,7 +233,7 @@ bool Weather::poll() {
   g_valid     = true;
   g_fetchedAt = millis();
   g_nextDelay = 10UL * 60UL * 1000UL;       // predpoved se meni pomalu
-  LOGF("[wx] %.1f C, kod %d, %s\n", g_temp, g_code, describe(g_code));
+  LOGF("[wx] %.1f C, kod %d, %s\n", g_temp, g_code, Lang::weather(g_code));
   return true;
 }
 
@@ -364,7 +330,7 @@ void Weather::draw(bool full) {
 
   if (!g_valid) {
     Draw::bigText(SCREEN_W / 2, 110,
-                  g_error[0] ? g_error : "nacitam pocasi...",
+                  g_error[0] ? g_error : T(S_WX_LOADING),
                   &FreeSans9pt7b, Draw::cText2, MC_DATUM);
     Draw::bigText(SCREEN_W / 2, 140, g_place, &FreeSansBold12pt7b,
                   Draw::cText, MC_DATUM);
@@ -384,17 +350,17 @@ void Weather::draw(bool full) {
   Draw::bigText(120 + tw + 24, 62, "C", &FreeSansBold12pt7b, Draw::cText2,
                 TL_DATUM);
 
-  Draw::text(120, 96, 190, 20, describe(g_code), &FreeSans9pt7b, 0,
+  Draw::text(120, 96, 190, 20, Lang::weather(g_code), &FreeSans9pt7b, 0,
              Draw::cAccent);
   Draw::text(120, 118, 190, 16, g_place, nullptr, 2, Draw::cText3);
 
   char detail[64];
-  snprintf(detail, sizeof(detail), "pocitove %d C   vlhkost %d%%",
+  snprintf(detail, sizeof(detail), T(S_WX_FEELS_FMT),
            (int)lroundf(g_feels), g_humidity);
   Draw::text(14, 134, 200, 16, detail, nullptr, 2, Draw::cText2);
 
   char wind[40];
-  snprintf(wind, sizeof(wind), "vitr %d km/h", (int)lroundf(g_wind));
+  snprintf(wind, sizeof(wind), T(S_WX_WIND_FMT), (int)lroundf(g_wind));
   Draw::text(214, 134, 92, 16, wind, nullptr, 2, Draw::cText2, 0, MR_DATUM);
 
   drawForecast();

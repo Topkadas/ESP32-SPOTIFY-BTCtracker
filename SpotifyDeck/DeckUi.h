@@ -54,7 +54,7 @@ int  valueFromX(Hit h, int16_t x);       // 0..100 pro Progress i Volume
 
 // --- nastaveni (blokujici modalni obrazovka po dlouhem stisku) -------
 enum class SettingsAction : uint8_t {
-  Back, Calibrate, Rotate, WifiPortal, ClearCache, Restart
+  Back, Calibrate, Rotate, WifiPortal, Language, ClearCache, Restart
 };
 SettingsAction runSettings();
 

@@ -4,6 +4,7 @@
 
 #include "DeckArt.h"
 #include "DeckDraw.h"
+#include "DeckLang.h"
 #include "DeckColor.h"
 #include "DeckConfig.h"
 #include "DeckIcons.h"
@@ -156,7 +157,7 @@ void drawVolume(int volume, bool supported) {
 
   if (!supported || volume < 0) {
     Icons::volume(VOL_X + 12, VOL_Y + VOL_H / 2, cText3, bg, 1);
-    textLine(VOL_BAR_X, VOL_Y + 2, VOL_BAR_W, 18, "nelze menit",
+    textLine(VOL_BAR_X, VOL_Y + 2, VOL_BAR_W, 18, T(S_VOL_UNAVAILABLE),
              nullptr, 2, cText3);
     return;
   }
@@ -246,7 +247,7 @@ void Ui::splash() {
 
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(cText3);
-  tft.drawString("startuji...", SCREEN_W / 2, SCREEN_H / 2 + 18);
+  tft.drawString(T(S_BOOTING), SCREEN_W / 2, SCREEN_H / 2 + 18);
   tft.setFreeFont(nullptr);
 }
 
@@ -436,7 +437,7 @@ void Ui::idle(const char* title, const char* detail) {
   tft.setTextDatum(MC_DATUM);
   tft.setFreeFont(&FreeSansBold12pt7b);
   tft.setTextColor(cText);
-  tft.drawString(title ? title : "Nic nehraje", SCREEN_W / 2, 152);
+  tft.drawString(title ? title : T(S_NOTHING_PLAYING), SCREEN_W / 2, 152);
 
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(cText3);
@@ -471,7 +472,7 @@ void Ui::error(const char* title, const char* detail) {
   tft.setTextDatum(MC_DATUM);
   tft.setFreeFont(&FreeSansBold12pt7b);
   tft.setTextColor(cText);
-  tft.drawString(title ? title : "Chyba", SCREEN_W / 2, 140);
+  tft.drawString(title ? title : T(S_ERROR), SCREEN_W / 2, 140);
 
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(cText3);
@@ -491,14 +492,14 @@ void Ui::reauth() {
   tft.setTextDatum(MC_DATUM);
   tft.setFreeFont(&FreeSansBold12pt7b);
   tft.setTextColor(cText);
-  tft.drawString("Spotify se odhlasilo", SCREEN_W / 2, 78);
+  tft.drawString(T(S_REAUTH_TITLE), SCREEN_W / 2, 78);
 
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(cText2);
-  tft.drawString("Refresh token uz neplati.", SCREEN_W / 2, 118);
-  tft.drawString("Spust znovu tools/get_token.py", SCREEN_W / 2, 144);
+  tft.drawString(T(S_REAUTH_L1), SCREEN_W / 2, 118);
+  tft.drawString(T(S_REAUTH_L2), SCREEN_W / 2, 144);
   tft.setTextColor(cText3);
-  tft.drawString("a nahraj sketch s novym tokenem.", SCREEN_W / 2, 168);
+  tft.drawString(T(S_REAUTH_L3), SCREEN_W / 2, 168);
   tft.setFreeFont(nullptr);
 }
 
@@ -690,19 +691,21 @@ void Ui::setLed(uint32_t rgb888) {
 // ---------------------------------------------------------------------
 namespace {
 
-struct MenuItem { const char* label; const char* hint; Ui::SettingsAction action; };
+struct MenuItem { StrId label; StrId hint; Ui::SettingsAction action; };
 
 const MenuItem MENU[] = {
-  {"Kalibrace dotyku", "klepni na dva terce",        Ui::SettingsAction::Calibrate},
-  {"Otocit displej",   "kdyz je obraz vzhuru nohama", Ui::SettingsAction::Rotate},
-  {"Nastavit WiFi",    "otevre portal SpotifyDeck",   Ui::SettingsAction::WifiPortal},
-  {"Smazat cache obalu", "uvolni misto v pameti",     Ui::SettingsAction::ClearCache},
-  {"Restartovat",      "",                            Ui::SettingsAction::Restart},
+  {S_MENU_CAL,     S_MENU_CAL_HINT,     Ui::SettingsAction::Calibrate},
+  {S_MENU_ROTATE,  S_MENU_ROTATE_HINT,  Ui::SettingsAction::Rotate},
+  {S_MENU_WIFI,    S_MENU_WIFI_HINT,    Ui::SettingsAction::WifiPortal},
+  {S_MENU_LANG,    S_MENU_LANG_HINT,    Ui::SettingsAction::Language},
+  {S_MENU_CACHE,   S_MENU_CACHE_HINT,   Ui::SettingsAction::ClearCache},
+  {S_MENU_RESTART, S_MENU_RESTART_HINT, Ui::SettingsAction::Restart},
 };
 constexpr int MENU_N = sizeof(MENU) / sizeof(MENU[0]);
 
-constexpr int16_t ROW_H  = 38;
-constexpr int16_t ROW_Y0 = 30;
+// Sest polozek se musi vejit pod nadpis do 240 px.
+constexpr int16_t ROW_H  = 34;
+constexpr int16_t ROW_Y0 = 28;
 
 void drawMenuRow(int i, bool pressed) {
   int16_t y = ROW_Y0 + i * ROW_H;
@@ -712,11 +715,11 @@ void drawMenuRow(int i, bool pressed) {
   tft.setTextDatum(ML_DATUM);
   tft.setFreeFont(&FreeSans9pt7b);
   tft.setTextColor(cText);
-  tft.drawString(MENU[i].label, 24, y + 13);
+  tft.drawString(T(MENU[i].label), 24, y + 11);
   tft.setFreeFont(nullptr);
   tft.setTextFont(2);
   tft.setTextColor(cText3);
-  tft.drawString(MENU[i].hint, 24, y + 26);
+  tft.drawString(T(MENU[i].hint), 24, y + 24);
 }
 
 }  // namespace
@@ -729,13 +732,13 @@ Ui::SettingsAction Ui::runSettings() {
   tft.setTextDatum(TL_DATUM);
   tft.setFreeFont(&FreeSansBold12pt7b);
   tft.setTextColor(cText);
-  tft.drawString("Nastaveni", 14, 4);
+  tft.drawString(T(S_SETTINGS), 14, 4);
   tft.setFreeFont(nullptr);
 
   tft.setTextDatum(TR_DATUM);
   tft.setTextFont(2);
   tft.setTextColor(cText3);
-  tft.drawString("klepni mimo = zpet", SCREEN_W - 14, 8);
+  tft.drawString(T(S_BACK_HINT), SCREEN_W - 14, 8);
 
   for (int i = 0; i < MENU_N; i++) drawMenuRow(i, false);
 

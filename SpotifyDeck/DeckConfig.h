@@ -19,6 +19,14 @@
 #define FEAT_NTP_CLOCK        1   // hodiny ve stavovem radku a na idle obrazovce
 
 // =====================================================================
+//  JAZYK PROSTREDI
+// =====================================================================
+//  0 = cesky, 1 = anglicky. Je to jen vychozi hodnota pri prvnim startu -
+//  pak se prepina primo na desce (dlouhy stisk -> Jazyk) a volba se
+//  uklada do NVS.
+#define DEFAULT_LANG_EN       0
+
+// =====================================================================
 //  ORIENTACE
 // =====================================================================
 //  1 a 3 jsou obe na sirku, otocene o 180 stupnu. Ktera je "spravne"

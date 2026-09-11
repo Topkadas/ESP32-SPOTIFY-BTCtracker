@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "DeckConfig.h"
+#include "DeckLang.h"
 
 namespace {
 
@@ -36,7 +37,7 @@ void configurePortal(WiFiManager& wm) {
   wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
   wm.setConnectTimeout(20);
   wm.setConnectRetries(2);
-  static WiFiManagerParameter cityParam("city", "Mesto pro pocasi",
+  static WiFiManagerParameter cityParam("city", T(S_CITY_PARAM),
                                         g_cityDefault, 40);
   cityParam.setValue(g_cityDefault, 40);
   g_cityParam = &cityParam;
@@ -51,9 +52,9 @@ void configurePortal(WiFiManager& wm) {
 
   wm.setAPCallback([](WiFiManager* mgr) {
     static char detail[96];
-    snprintf(detail, sizeof(detail), "WiFi: %s / heslo: %s",
+    snprintf(detail, sizeof(detail), T(S_WIFI_CREDS),
              mgr->getConfigPortalSSID().c_str(), AP_PASSWORD);
-    say("Nastav WiFi", detail);
+    say(T(S_WIFI_SETUP), detail);
   });
 }
 
@@ -66,13 +67,14 @@ void Net::begin(StatusFn status) {
   WiFi.setSleep(false);            // bez tohohle jsou HTTP dotazy trhane
   WiFi.setAutoReconnect(true);
 
-  say("Pripojuji WiFi", WiFi.SSID().length() ? WiFi.SSID().c_str() : "hledam sit");
+  say(T(S_WIFI_CONNECTING),
+      WiFi.SSID().length() ? WiFi.SSID().c_str() : T(S_WIFI_SEARCHING));
 
   WiFiManager wm;
   configurePortal(wm);
 
   if (!wm.autoConnect(AP_NAME, AP_PASSWORD)) {
-    say("WiFi se nepripojilo", "restartuji");
+    say(T(S_WIFI_FAILED), T(S_RESTARTING));
     delay(1500);
     ESP.restart();
   }

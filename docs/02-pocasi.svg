@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="260" viewBox="0 0 340 260">
+  <rect width="340" height="260" rx="12" fill="#131519"/>
+  <rect x="0.6" y="0.6" width="338.8" height="258.8" rx="11.4" fill="none" stroke="#E0A82E" stroke-width="1.2"/>
+  <svg x="10" y="10" width="320" height="240" viewBox="0 0 320 240" role="img"
+             aria-label="Obrazovka pocasi: polojasno, 12 stupnu, Jirny, predpoved na tri dny">
+          <defs>
+            <linearGradient id="wxbg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2A5586"/>
+              <stop offset="1" stop-color="#08111E"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="240" fill="url(#wxbg)"/>
+
+          <!-- stavovy radek -->
+          <g fill="#CBD4E3">
+            <rect x="11" y="13" width="3" height="3"/><rect x="15" y="10" width="3" height="6"/>
+            <rect x="19" y="7"  width="3" height="9"/><rect x="23" y="4"  width="3" height="12"/>
+          </g>
+          <circle cx="143" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="154" cy="10" r="3" fill="#FFFFFF"/>
+          <circle cx="165" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="176" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <text x="306" y="14" text-anchor="end" font-family="Verdana,sans-serif"
+                font-size="11" fill="#CBD4E3">14:32</text>
+
+          <!-- ikona: polojasno -->
+          <g>
+            <circle cx="53" cy="79" r="9" fill="#FFD066"/>
+            <g stroke="#FFD066" stroke-width="2.2" stroke-linecap="round">
+              <path d="M53 65 V61"/><path d="M53 97 V93"/>
+              <path d="M39 79 H35"/><path d="M71 79 H67"/>
+              <path d="M43 69 L40 66"/><path d="M63 89 L66 92"/>
+              <path d="M63 69 L66 66"/><path d="M43 89 L40 92"/>
+            </g>
+            <g fill="#E7EDF6">
+              <circle cx="56" cy="97" r="9"/><circle cx="67" cy="91" r="12"/>
+              <circle cx="78" cy="97" r="8"/>
+              <rect x="47" y="95" width="34" height="10" rx="5"/>
+            </g>
+          </g>
+
+          <!-- teplota -->
+          <text x="120" y="94" font-family="Arial,Helvetica,sans-serif" font-size="46"
+                font-weight="bold" fill="#FFFFFF">12</text>
+          <circle cx="176" cy="66" r="5" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <text x="186" y="80" font-family="Arial,Helvetica,sans-serif" font-size="18"
+                font-weight="bold" fill="#CBD4E3">C</text>
+
+          <text x="120" y="112" font-family="Arial,Helvetica,sans-serif" font-size="13"
+                fill="#FFD066">polojasno</text>
+          <text x="120" y="131" font-family="Verdana,sans-serif" font-size="11"
+                fill="#939FB4">Jirny</text>
+
+          <!-- detailni radek -->
+          <text x="14"  y="145" font-family="Verdana,sans-serif" font-size="11"
+                fill="#CBD4E3">pocitove 10 C   vlhkost 74%</text>
+          <text x="306" y="145" text-anchor="end" font-family="Verdana,sans-serif" font-size="11"
+                fill="#CBD4E3">vitr 14 km/h</text>
+
+          <!-- predpoved -->
+          <g>
+            <rect x="10"  y="166" width="96" height="68" rx="12" fill="#000" opacity=".34"/>
+            <rect x="110" y="166" width="96" height="68" rx="12" fill="#000" opacity=".34"/>
+            <rect x="210" y="166" width="96" height="68" rx="12" fill="#000" opacity=".34"/>
+          </g>
+          <g font-family="Verdana,sans-serif" font-size="11" fill="#CBD4E3" text-anchor="middle">
+            <text x="58"  y="182">So</text>
+            <text x="158" y="182">Ne</text>
+            <text x="258" y="182">Po</text>
+          </g>
+          <!-- ikonky predpovedi -->
+          <g fill="#E7EDF6">
+            <circle cx="30" cy="204" r="5"/><circle cx="36" cy="200" r="7"/>
+            <circle cx="42" cy="204" r="4"/><rect x="25" y="203" width="21" height="6" rx="3"/>
+          </g>
+          <g fill="#E7EDF6" opacity=".95">
+            <circle cx="130" cy="204" r="5"/><circle cx="136" cy="200" r="7"/>
+            <circle cx="142" cy="204" r="4"/><rect x="125" y="203" width="21" height="6" rx="3"/>
+          </g>
+          <g stroke="#6EC6FF" stroke-width="2" stroke-linecap="round">
+            <path d="M130 212 L128 217"/><path d="M137 212 L135 217"/><path d="M144 212 L142 217"/>
+          </g>
+          <circle cx="236" cy="202" r="8" fill="#FFD066"/>
+          <g stroke="#FFD066" stroke-width="2" stroke-linecap="round">
+            <path d="M236 190 V187"/><path d="M236 217 V214"/>
+            <path d="M224 202 H221"/><path d="M251 202 H248"/>
+          </g>
+          <g font-family="Verdana,sans-serif" font-size="11" fill="#FFFFFF">
+            <text x="54"  y="204">15 / 8</text>
+            <text x="154" y="204">13 / 7</text>
+            <text x="254" y="204">18 / 9</text>
+          </g>
+          <g font-family="Verdana,sans-serif" font-size="10" fill="#FFD066">
+            <text x="54"  y="220">20%</text>
+            <text x="154" y="220">65%</text>
+          </g>
+        </svg>
+</svg>

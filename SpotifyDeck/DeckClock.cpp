@@ -6,6 +6,7 @@
 #include "DeckArt.h"
 #include "DeckColor.h"
 #include "DeckConfig.h"
+#include "DeckLang.h"
 #include "DeckDraw.h"
 #include "DeckNet.h"
 #include "DeckTft.h"
@@ -35,10 +36,6 @@ char lastDigital[8] = {0};
 uint16_t cFace, cRing, cTick, cHand, cSecond, cText;
 
 Preferences prefs;
-
-const char* DAYS[7]   = {"Ne", "Po", "Ut", "St", "Ct", "Pa", "So"};
-const char* MONTHS[12] = {"led", "uno", "bre", "dub", "kve", "cvn",
-                          "cvc", "srp", "zar", "rij", "lis", "pro"};
 
 void applyPalette() {
   Art::useArtBackground(false);
@@ -92,8 +89,8 @@ void drawFace(const struct tm& t) {
 
   // Datum pod stredem
   char date[24];
-  snprintf(date, sizeof(date), "%s %d. %s", DAYS[t.tm_wday % 7], t.tm_mday,
-           MONTHS[t.tm_mon % 12]);
+  snprintf(date, sizeof(date), "%s %d. %s", Lang::dayShort(t.tm_wday),
+           t.tm_mday, Lang::monthShort(t.tm_mon));
   face.setTextFont(2);
   face.setTextColor(Draw::cAccent);
   face.setTextDatum(MC_DATUM);
@@ -158,8 +155,8 @@ void drawDigital(const struct tm& t, bool full) {
   tft.drawString(sec, SCREEN_W / 2 + 88, 128, 4);
 
   char date[32];
-  snprintf(date, sizeof(date), "%s %d. %s %d", DAYS[t.tm_wday % 7],
-           t.tm_mday, MONTHS[t.tm_mon % 12], 1900 + t.tm_year);
+  snprintf(date, sizeof(date), "%s %d. %s %d", Lang::dayShort(t.tm_wday),
+           t.tm_mday, Lang::monthShort(t.tm_mon), 1900 + t.tm_year);
   Draw::text(40, 168, 240, 20, date, &FreeSans9pt7b, 0, Draw::cText2, 0,
              TC_DATUM);
 }
@@ -194,7 +191,7 @@ void Clock::draw(bool full) {
     if (full) {
       applyPalette();
       Art::paintBackground();
-      Draw::bigText(SCREEN_W / 2, 120, "cekam na cas z internetu",
+      Draw::bigText(SCREEN_W / 2, 120, T(S_CLOCK_WAITING),
                     &FreeSans9pt7b, Draw::cText2, MC_DATUM);
     }
     return;

@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="260" viewBox="0 0 340 260">
+  <rect width="340" height="260" rx="12" fill="#131519"/>
+  <rect x="0.6" y="0.6" width="338.8" height="258.8" rx="11.4" fill="none" stroke="#E0A82E" stroke-width="1.2"/>
+  <svg x="10" y="10" width="320" height="240" viewBox="0 0 320 240" role="img"
+             aria-label="Analogove hodiny ukazujici 14:32, pod stredem datum">
+          <defs>
+            <linearGradient id="clkbg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#141A2C"/>
+              <stop offset="1" stop-color="#04050A"/>
+            </linearGradient>
+          </defs>
+          <rect width="320" height="240" fill="url(#clkbg)"/>
+
+          <g fill="#CBD4E3">
+            <rect x="11" y="13" width="3" height="3"/><rect x="15" y="10" width="3" height="6"/>
+            <rect x="19" y="7"  width="3" height="9"/><rect x="23" y="4"  width="3" height="12"/>
+          </g>
+          <circle cx="143" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="154" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="165" cy="10" r="2" fill="#FFFFFF" opacity=".38"/>
+          <circle cx="176" cy="10" r="3" fill="#FFFFFF"/>
+          <text x="306" y="14" text-anchor="end" font-family="Verdana,sans-serif"
+                font-size="11" fill="#CBD4E3">10:09</text>
+
+          <!-- cifernik -->
+          <circle cx="160" cy="130" r="94" fill="#0C111C"/>
+          <circle cx="160" cy="130" r="94" fill="none" stroke="#243048" stroke-width="2"/>
+
+          <!-- minutove risky (kazda 6 stupnu) -->
+          <g stroke="#7E8BA4" stroke-width="1.4" stroke-linecap="round">
+            <path d="M160 43 v0"/>
+          </g>
+          <g id="ticks" stroke="#7E8BA4" stroke-width="1.4" stroke-linecap="round">
+            <path d="M160 39.2 V46" transform="rotate(6 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(12 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(18 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(24 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(36 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(42 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(48 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(54 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(66 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(72 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(78 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(84 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(96 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(102 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(108 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(114 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(126 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(132 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(138 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(144 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(156 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(162 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(168 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(174 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(186 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(192 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(198 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(204 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(216 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(222 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(228 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(234 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(246 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(252 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(258 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(264 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(276 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(282 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(288 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(294 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(306 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(312 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(318 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(324 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(336 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(342 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(348 160 130)"/>
+            <path d="M160 39.2 V46" transform="rotate(354 160 130)"/>
+          </g>
+          <!-- hodinove risky -->
+          <g stroke="#B6C2D6" stroke-width="3" stroke-linecap="round">
+            <path d="M160 39.2 V50"/>
+            <path d="M160 39.2 V50" transform="rotate(30 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(60 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(90 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(120 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(150 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(180 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(210 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(240 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(270 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(300 160 130)"/>
+            <path d="M160 39.2 V50" transform="rotate(330 160 130)"/>
+          </g>
+
+          <g font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="bold"
+             fill="#B6C2D6" text-anchor="middle">
+            <text x="160" y="74">12</text>
+            <text x="222" y="136">3</text>
+            <text x="160" y="199">6</text>
+            <text x="98"  y="136">9</text>
+          </g>
+
+          <text x="160" y="168" text-anchor="middle" font-family="Verdana,sans-serif"
+                font-size="11" fill="#5EC8FF">Pa 11. zar</text>
+
+          <!-- rucicky: 10:09:42 -->
+          <g stroke-linecap="round">
+            <path d="M171.5 137.9 L119.7 102.2" stroke="#F2F6FF" stroke-width="6.5"/>
+            <path d="M145.4 140.6 L217.4 88.3"  stroke="#F2F6FF" stroke-width="4.5"/>
+            <path d="M180.9 123.2 L84.9 154.4"  stroke="#5EC8FF" stroke-width="2"/>
+          </g>
+          <circle cx="84.9" cy="154.4" r="3" fill="#5EC8FF"/>
+          <circle cx="160" cy="130" r="6" fill="#5EC8FF"/>
+          <circle cx="160" cy="130" r="2" fill="#0C111C"/>
+        </svg>
+</svg>

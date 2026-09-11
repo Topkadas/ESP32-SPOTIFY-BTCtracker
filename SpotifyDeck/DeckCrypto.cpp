@@ -6,6 +6,7 @@
 #include "DeckArt.h"
 #include "DeckColor.h"
 #include "DeckConfig.h"
+#include "DeckLang.h"
 #include "DeckDraw.h"
 #include "DeckHttp.h"
 #include "DeckIcons.h"
@@ -140,7 +141,7 @@ bool Crypto::poll() {
   if (g_fiat == FIAT_CZK &&
       (g_usdCzk <= 0 || millis() - g_czkFetchedAt > 6UL * 3600UL * 1000UL)) {
     if (!fetchCzkRate() && g_usdCzk <= 0) {
-      snprintf(g_error, sizeof(g_error), "kurz CNB se nepodarilo nacist");
+      snprintf(g_error, sizeof(g_error), "%s", T(S_BTC_CNB_FAIL));
       g_nextDelay = 60000;
       return false;
     }
@@ -159,7 +160,7 @@ bool Crypto::poll() {
   String url = String(BINANCE) + "/api/v3/ticker/24hr?symbol=" + sym;
   Http::Result r = Http::getJson(url, doc, &filter);
   if (!r.ok()) {
-    snprintf(g_error, sizeof(g_error), "Binance: HTTP %d", r.code);
+    snprintf(g_error, sizeof(g_error), T(S_BTC_HTTP_FMT), r.code);
     g_nextDelay = 60000;
     return false;
   }
@@ -218,7 +219,7 @@ void drawChart() {
   uint16_t bg = Draw::cPanel;
 
   if (g_seriesLen < 2) {
-    Draw::text(CH_X, CH_Y + CH_H / 2 - 8, CH_W, 16, "graf neni k dispozici",
+    Draw::text(CH_X, CH_Y + CH_H / 2 - 8, CH_W, 16, T(S_BTC_NOCHART),
                nullptr, 2, Draw::cText3, 0, TC_DATUM);
     return;
   }
@@ -272,8 +273,8 @@ void drawFooter() {
   formatPrice(g_low, lo, sizeof(lo));
 
   char left[40], mid[40];
-  snprintf(left, sizeof(left), "24h max  %s", hi);
-  snprintf(mid, sizeof(mid), "24h min  %s", lo);
+  snprintf(left, sizeof(left), "%s  %s", T(S_BTC_HIGH), hi);
+  snprintf(mid, sizeof(mid), "%s  %s", T(S_BTC_LOW), lo);
 
   Draw::text(20, y + 7, 140, 16, left, nullptr, 2, Draw::cText2);
   Draw::text(166, y + 7, 100, 16, mid, nullptr, 2, Draw::cText2);
@@ -299,7 +300,7 @@ void Crypto::draw(bool full) {
 
   if (!g_valid) {
     Draw::bigText(SCREEN_W / 2, 120,
-                  g_error[0] ? g_error : "nacitam kurz...", &FreeSans9pt7b,
+                  g_error[0] ? g_error : T(S_BTC_LOADING), &FreeSans9pt7b,
                   Draw::cText2, MC_DATUM);
     return;
   }

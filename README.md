@@ -1,26 +1,20 @@
 # SpotifyDeck
 
+*[English version](README.en.md)*
+
 Čtyři stránky na jedné laciné desce s dotykovým displejem: **Spotify ovladač**,
 **počasí**, **kurz bitcoinu** a **analogové hodiny**. Přepíná se to tahem prstu.
 
 Běží na ESP32-2432S028R, známém jako **CYD — "Cheap Yellow Display"**.
 Žádné pájení, žádné dráty, jedna deska a USB kabel.
 
-```
-┌──────────────────────────────────────────┐
-│ ▂▄▆█  ● ○ ○ ○                     14:32  │   stavový řádek: WiFi, tečky stránek, čas
-│ ░░┌────────────┐░░░░░░░░░░░░░░░░░░░░░░░░ │
-│ ░░│            │░  360                 ░ │   rozmazaný obal = pozadí
-│ ░░│   obal     │░  Charli xcx          ░ │
-│ ░░│  150×150   │░  brat                ░ │
-│ ░░│            │░  > Kuchyne           ░ │
-│ ░░└────────────┘░  ((o ──────o────     ░ │   hlasitost
-│ ░ 1:12 ━━━━━━━●─────────────────  3:33 ░ │   průběh (tahem přetočíš)
-│ ╭──────────────────────────────────────╮ │
-│ │   ⤨      ⏮     (⏸)     ⏭      ⟳     │ │   skleněná lišta
-│ ╰──────────────────────────────────────╯ │
-└──────────────────────────────────────────┘
-```
+| | |
+|---|---|
+| ![Spotify](docs/01-spotify.png) | ![Počasí](docs/02-pocasi.png) |
+| ![Bitcoin](docs/03-bitcoin.png) | ![Hodiny](docs/04-hodiny.png) |
+
+> Celé prostředí displeje je **česky i anglicky**. Dlouhý stisk → *Jazyk*.
+> Volba se ukládá do desky.
 
 ---
 
@@ -68,9 +62,11 @@ Běží na ESP32-2432S028R, známém jako **CYD — "Cheap Yellow Display"**.
 
 ### Napříč všemi stránkami
 
+- **Čeština i angličtina.** Celé prostředí se přepíná v nastavení a volba
+  přežije restart. Výchozí jazyk se dá změnit v `DeckConfig.h`.
 - **Prst doleva/doprava** = další/předchozí stránka.
 - **Dlouhý stisk** = nastavení (kalibrace dotyku, otočení displeje,
-  WiFi portál, smazání cache obalů, restart).
+  WiFi portál, jazyk, smazání cache obalů, restart).
 - **Kalibrace dotyku přímo na desce** — dva terče, výsledek do NVS.
   Pozná i případné prohození os. Žádné přepisování konstant ve zdrojáku.
 - **Automatické ztlumení podsvícení** po nečinnosti, volitelně podle
@@ -228,6 +224,8 @@ Všechno laditelné je v [`SpotifyDeck/DeckConfig.h`](SpotifyDeck/DeckConfig.h).
 #define FEAT_RGB_LED          1   // LED v barve alba
 #define FEAT_ART_CACHE        1   // cache obalu v LittleFS
 #define FEAT_NTP_CLOCK        1
+
+#define DEFAULT_LANG_EN       0   // 1 = startovat v anglictine
 ```
 
 Dál se tam dá změnit rozložení obrazovky (souřadnice všech prvků),
@@ -253,6 +251,7 @@ SpotifyDeck/
 ├─ DeckDraw.*         sdílený sprite na text, paleta, skleněné panely
 ├─ DeckUi.*           obrazovky Spotify, stavový řádek, nastavení, podsvícení
 ├─ DeckIcons.*        všechny ikony kreslené z primitiv
+├─ DeckLang.*        české a anglické texty prostředí
 ├─ DeckColor.h        barevná matematika (RGB565/888, HSV, míchání)
 ├─ DeckText.h         převod UTF-8 → ASCII
 ├─ DeckTouch.*        dotyk + kalibrace
