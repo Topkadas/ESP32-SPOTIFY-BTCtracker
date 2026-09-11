@@ -10,8 +10,9 @@
 
 namespace {
 
-// Nahled pro pozadi. Dekoduje se v meritku 1/8, takze 300x300 da 37x37
-// a 640x640 (kdyby Spotify mensi obal neposlalo) presne 80x80.
+// The thumbnail for the background. Decoded at 1/8 scale, so 300x300
+// gives 37x37 and 640x640 (should Spotify send nothing smaller) exactly
+// 80x80.
 constexpr int THUMB_MAX = 80;
 
 uint16_t g_thumb[THUMB_MAX * THUMB_MAX];
@@ -22,21 +23,22 @@ uint8_t* g_jpeg    = nullptr;
 size_t   g_jpegLen = 0;
 char     g_id[48]  = {0};
 
-// Nahradni paleta, kdyz zadny obal nemame.
+// The substitute palette for when we have no artwork.
 uint32_t g_dominant = Col::rgb(0x1E, 0xD7, 0x60);
 uint32_t g_accent   = Col::rgb(0x1E, 0xD7, 0x60);
 uint32_t g_bgTop    = Col::rgb(0x12, 0x1C, 0x30);
 uint32_t g_bgBottom = Col::rgb(0x05, 0x07, 0x0C);
 
-// Automaticka "expozice" pozadi: 255 = beze zmeny. Dopocita se z prumerne
-// svetlosti obalu, aby svetle obaly (brat) neprezarily bily text a tmave
-// obaly nezcernaly uplne.
+// Automatic background "exposure": 255 = unchanged. Derived from the
+// average lightness of the artwork, so bright covers (brat) do not wash
+// out the white text and dark covers do not go completely black.
 uint16_t g_bgGain = 130;
 
-// Paleta spocitana z obalu alba se drzi zvlast. Ostatni stranky si
-// prebijeji "zive" hodnoty pres setFlatPalette(), a bez teto zalohy by
-// se barva odvozena z obalu uz nikdy nevratila - Art::load() se totiz
-// pri nezmenenem obalu hned vraci a znovu ji nepocita.
+// The palette computed from the album art is kept separately. The other
+// pages overwrite the "live" values through setFlatPalette(), and without
+// this backup the color derived from the artwork would never come back -
+// Art::load() returns immediately when the art has not changed and does
+// not recompute it.
 uint32_t g_artDominant = 0;
 uint32_t g_artAccent   = 0;
 uint32_t g_artBgTop    = 0;
@@ -45,24 +47,24 @@ uint16_t g_artBgGain   = 130;
 bool     g_artPalette  = false;
 
 bool g_fsReady  = false;
-bool g_useArt   = true;    // false = hladky prechod misto rozmazaneho obalu
+bool g_useArt   = true;    // false = a smooth gradient instead of blurred art
 
-constexpr uint8_t  BG_TARGET_LUMA = 52;   // cilova stredni svetlost pozadi
-constexpr uint16_t BG_VIGNETTE    = 92;   // o kolik ztmavit smerem dolu
+constexpr uint8_t  BG_TARGET_LUMA = 52;   // target mean lightness of the background
+constexpr uint16_t BG_VIGNETTE    = 92;   // how much to darken towards the bottom
 
-// --- radek pozadi se pocita po pixelech, tohle je sdileny buffer -----
+// --- the background row is computed pixel by pixel, this is the buffer -
 uint16_t g_rowBuf[SCREEN_W];
 
-// Rozptylovaci matice 4x4 (Bayer). RGB565 ma v zelenem kanalu jen 64
-// urovni, takze plynuly prechod pres celou vysku displeje se rozpadne
-// do viditelnych pruhu. Pridani teto "sumove" korekce pred zaokrouhlenim
-// pruhy rozbije a vypada to jako plynuly prechod.
+// A 4x4 dither matrix (Bayer). RGB565 has only 64 levels in the green
+// channel, so a gradient spanning the whole height of the display falls
+// apart into visible bands. Adding this "noise" correction before the
+// rounding breaks the bands up and it reads as a smooth gradient.
 const uint8_t BAYER[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
 
 inline uint16_t dither565(uint32_t c, int x, int y) {
   int t = BAYER[((y & 3) << 2) | (x & 3)];      // 0..15
-  int r = (int)Col::R(c) + (t >> 1) - 4;        // R/B: 3 bity se zahazuji
-  int g = (int)Col::G(c) + (t >> 2) - 2;        // G:   2 bity
+  int r = (int)Col::R(c) + (t >> 1) - 4;        // R/B: 3 bits get thrown away
+  int g = (int)Col::G(c) + (t >> 2) - 2;        // G:   2 bits
   int b = (int)Col::B(c) + (t >> 1) - 4;
   return Col::to565((uint8_t)constrain(r, 0, 255),
                     (uint8_t)constrain(g, 0, 255),
@@ -70,7 +72,7 @@ inline uint16_t dither565(uint32_t c, int x, int y) {
 }
 
 // -------------------------------------------------------------------
-//  Callbacky dekoderu
+//  Decoder callbacks
 // -------------------------------------------------------------------
 bool cbThumb(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bmp) {
   for (uint16_t j = 0; j < h; j++) {
@@ -86,12 +88,12 @@ bool cbThumb(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bmp) {
 }
 
 bool cbTft(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bmp) {
-  tft.pushImage(x, y, w, h, bmp);   // pushImage si orizne sam podle viewportu
+  tft.pushImage(x, y, w, h, bmp);   // pushImage clips itself against the viewport
   return true;
 }
 
 // -------------------------------------------------------------------
-//  Zpracovani nahledu
+//  Thumbnail processing
 // -------------------------------------------------------------------
 void boxBlur() {
   if (g_tw < 3 || g_th < 3) return;
@@ -124,8 +126,8 @@ void boxBlur() {
   }
 }
 
-// Dominantni barva: prumer pres nejsilnejsi odstinovy kos.
-// Obycejny prumer vsech pixelu by u vetsiny obalu dal blato.
+// Dominant color: the average over the strongest hue bucket. A plain
+// average of every pixel would come out as mud on most covers.
 void computePalette() {
   constexpr int BUCKETS = 16;
   uint32_t sumR[BUCKETS] = {0}, sumG[BUCKETS] = {0}, sumB[BUCKETS] = {0};
@@ -156,7 +158,7 @@ void computePalette() {
     if (cnt[b] > bestN) { bestN = cnt[b]; best = b; }
   }
 
-  // Barevny kos vyhrava jen tehdy, kdyz neni uplne marginalni.
+  // A color bucket only wins if it is not completely marginal.
   if (best >= 0 && bestN * 8 >= (uint32_t)total) {
     g_dominant = Col::rgb((uint8_t)(sumR[best] / bestN),
                           (uint8_t)(sumG[best] / bestN),
@@ -192,8 +194,8 @@ bool decodeThumb() {
   if (TJpgDec.getJpgSize(&jw, &jh, g_jpeg, g_jpegLen) != JDR_OK) return false;
   if (!jw || !jh) return false;
 
-  // 1/8 je nejmensi meritko, ktere TJpgDec umi - presne to chceme.
-  // 300x300 -> 37x37, 640x640 -> 80x80, oboji se vejde do THUMB_MAX.
+  // 1/8 is the smallest scale TJpgDec can do - exactly what we want.
+  // 300x300 -> 37x37, 640x640 -> 80x80, both fit inside THUMB_MAX.
   const uint8_t scale = 8;
   g_tw = min<int>(jw / scale, THUMB_MAX);
   g_th = min<int>(jh / scale, THUMB_MAX);
@@ -202,11 +204,11 @@ bool decodeThumb() {
   memset(g_thumb, 0, sizeof(uint16_t) * g_tw * g_th);
 
   TJpgDec.setJpgScale(scale);
-  TJpgDec.setSwapBytes(false);       // chceme nativni RGB565 pro vypocty
+  TJpgDec.setSwapBytes(false);       // we want native RGB565 for the math
   TJpgDec.setCallback(cbThumb);
   JRESULT r = TJpgDec.drawJpg(0, 0, g_jpeg, g_jpegLen);
   if (r != JDR_OK && r != JDR_INTR) {
-    LOGF("[art] thumb decode selhal (%d)\n", (int)r);
+    LOGF("[art] thumb decode failed (%d)\n", (int)r);
     return false;
   }
 
@@ -217,19 +219,19 @@ bool decodeThumb() {
 }
 
 // -------------------------------------------------------------------
-//  Vzorkovani pozadi
+//  Background sampling
 // -------------------------------------------------------------------
 struct RowMap {
   int32_t sxStep;   // 16.16
   int32_t sx0;
   int32_t sy;       // 16.16
-  uint16_t fade;    // 0..255, nasobitel jasu pro tento radek
+  uint16_t fade;    // 0..255, brightness multiplier for this row
 };
 
 RowMap mapRow(int16_t y) {
   RowMap m;
-  // "cover" fit: sirka nahledu se roztahne na celou sirku displeje,
-  // na vysku se orizne symetricky.
+  // A "cover" fit: the thumbnail is stretched to the full display width
+  // and cropped symmetrically in height.
   int visH = (int)((int32_t)g_th * SCREEN_H / SCREEN_W);
   if (visH > g_th) visH = g_th;
   int topOff = (g_th - visH) / 2;
@@ -273,7 +275,7 @@ bool blurUsable() {
 }
 
 // -------------------------------------------------------------------
-//  Cache obalu v LittleFS
+//  Artwork cache in LittleFS
 // -------------------------------------------------------------------
 #if FEAT_ART_CACHE
 
@@ -303,7 +305,8 @@ size_t cacheRead(const char* id, uint8_t** buf) {
   return len;
 }
 
-// Nejjednodussi mozna "LRU": kdyz je souboru moc, smaz ten nejstarsi.
+// The simplest possible "LRU": when there are too many files, delete
+// the oldest one.
 void cachePrune(size_t maxFiles) {
   if (!g_fsReady) return;
   File dir = LittleFS.open("/art");
@@ -350,17 +353,17 @@ void cacheWrite(const char* id, const uint8_t* buf, size_t len) {
 }  // namespace
 
 // =====================================================================
-//  Verejne API
+//  Public API
 // =====================================================================
 void Art::begin() {
 #if FEAT_ART_CACHE
-  g_fsReady = LittleFS.begin(true);      // true = pri prvnim startu naformatovat
+  g_fsReady = LittleFS.begin(true);      // true = format on the first boot
   if (g_fsReady) {
     if (!LittleFS.exists("/art")) LittleFS.mkdir("/art");
-    LOGF("[art] LittleFS ok, volno %u B\n",
+    LOGF("[art] LittleFS ok, %u B free\n",
          (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
   } else {
-    LOGLN("[art] LittleFS se nepodarilo pripojit - cache vypnuta");
+    LOGLN("[art] LittleFS would not mount - cache disabled");
   }
 #endif
 }
@@ -381,9 +384,9 @@ void Art::unload() {
 
 bool Art::load(const char* artId, const char* url) {
   if (!artId || !*artId || !url || !*url) return false;
-  if (g_jpeg && strcmp(g_id, artId) == 0) return true;   // uz ho mame
+  if (g_jpeg && strcmp(g_id, artId) == 0) return true;   // we already have it
 
-  // Stary obal uvolnit jeste PRED stahovanim, jinak by v pameti byly dva.
+  // Free the old art BEFORE downloading, or two of them sit in memory.
   if (g_jpeg) { free(g_jpeg); g_jpeg = nullptr; g_jpegLen = 0; }
 
   uint8_t* buf = nullptr;
@@ -408,10 +411,11 @@ bool Art::load(const char* artId, const char* url) {
   g_id[sizeof(g_id) - 1] = '\0';
 
   if (!decodeThumb()) {
-    // Bez nahledu neni ani paleta, ani rozmazane pozadi. Zahodime i id,
-    // aby to priste zkusilo znovu - jinak by zkratka na shodne id tuhle
-    // chybu u daneho alba zakonzervovala.
-    LOGLN("[art] nahled se nepodaril, zahazuji obal");
+    // Without a thumbnail there is neither a palette nor a blurred
+    // background. Drop the id as well so the next attempt retries -
+    // otherwise the shortcut on a matching id would freeze this failure
+    // in place for that album.
+    LOGLN("[art] thumbnail failed, dropping the artwork");
     g_id[0] = '\0';
     g_tw = g_th = 0;
     return false;
@@ -421,8 +425,8 @@ bool Art::load(const char* artId, const char* url) {
 
 void Art::useArtBackground(bool on) {
   g_useArt = on;
-  // Navrat na stranku Spotify musi obnovit i barvy z obalu, ne jen
-  // prepnout zdroj pozadi.
+  // Coming back to the Spotify page has to restore the colors from the
+  // artwork too, not just switch the background source.
   if (on && g_artPalette) {
     g_dominant = g_artDominant;
     g_accent   = g_artAccent;
@@ -445,7 +449,7 @@ uint32_t    Art::dominant()  { return g_dominant; }
 uint32_t    Art::accent()    { return g_accent; }
 
 // ---------------------------------------------------------------------
-//  Pozadi
+//  Background
 // ---------------------------------------------------------------------
 uint16_t Art::pixelAt(int16_t x, int16_t y) {
   x = constrain(x, (int16_t)0, (int16_t)(SCREEN_W - 1));
@@ -506,12 +510,12 @@ void Art::paintBackground() {
 }
 
 // ---------------------------------------------------------------------
-//  Obal
+//  Cover
 // ---------------------------------------------------------------------
 namespace {
 
-// Po vykresleni ctverce vrati rohove pixely na pozadi, aby obal vypadal
-// jako zaobleny obdelnik a ne jako ostry ctverec.
+// After the square is drawn, put the corner pixels back to the background
+// so the cover reads as a rounded rectangle and not a hard square.
 void roundCorners(int16_t x, int16_t y, int16_t size, int16_t r) {
   if (r <= 0) return;
   int32_t rr = (int32_t)r * r;
@@ -538,7 +542,7 @@ void roundCorners(int16_t x, int16_t y, int16_t size, int16_t r) {
   tft.setSwapBytes(swap);
 }
 
-// Vybere nejvetsi meritko dekoderu, ktere jeste vyplni pozadovanou plochu.
+// Picks the largest decoder scale that still fills the requested area.
 uint8_t scaleFor(uint16_t srcW, int16_t want) {
   uint8_t scale = 1;
   while (scale < 8 && (srcW / (uint16_t)(scale * 2)) >= (uint16_t)want) scale *= 2;
@@ -569,14 +573,15 @@ bool Art::drawCover(int16_t x, int16_t y, int16_t size) {
   tft.setSwapBytes(swap);
 
   if (r != JDR_OK && r != JDR_INTR) {
-    LOGF("[art] cover decode selhal (%d)\n", (int)r);
+    LOGF("[art] cover decode failed (%d)\n", (int)r);
     return false;
   }
 
   roundCorners(x, y, size, ART_RADIUS);
 
-  // Jemny svetly obrys, aby obal nesplynul s rozmazanym pozadim.
-  // Barvu odvodime z pozadi kolem obalu, at sedi at uz je za nim cokoliv.
+  // A faint light outline so the cover does not blend into the blurred
+  // background. The color comes from the background around the cover, so
+  // it fits whatever happens to be behind it.
   uint32_t around = Col::to888(Art::pixelAt(x + size / 2, y - 2));
   around = Col::mix(around, Col::to888(Art::pixelAt(x + size / 2, y + size + 1)), 128);
   tft.drawRoundRect(x - 1, y - 1, size + 2, size + 2, ART_RADIUS + 1,
@@ -590,7 +595,7 @@ bool Art::drawCoverFull() {
   uint16_t jw = 0, jh = 0;
   if (TJpgDec.getJpgSize(&jw, &jh, g_jpeg, g_jpegLen) != JDR_OK || !jw) return false;
 
-  // Chceme vyplnit na vysku, prebytek se orizne.
+  // We want to fill the height; the excess gets cropped.
   uint8_t scale = scaleFor(jw, SCREEN_H);
   int dw = jw / scale, dh = jh / scale;
 

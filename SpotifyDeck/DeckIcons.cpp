@@ -5,8 +5,8 @@
 
 namespace {
 
-// Trojuhelnik s vyhlazenymi hranami: nejdriv vypln, pak se po obvodu
-// vede tenka "siroka cara", ktera hrany prolne s pozadim.
+// A triangle with smoothed edges: fill it first, then run a thin "wide
+// line" around the outline, which blends the edges into the background.
 void smoothTriangle(float x1, float y1, float x2, float y2,
                     float x3, float y3, uint16_t fg, uint16_t bg) {
   tft.fillTriangle((int32_t)x1, (int32_t)y1, (int32_t)x2, (int32_t)y2,
@@ -50,14 +50,15 @@ void Icons::prev(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg) {
 }
 
 void Icons::shuffle(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg) {
-  // spodni draha: zleva rovne, pak nahoru doprava
+  // lower path: straight in from the left, then up to the right
   tft.drawWideLine(cx - 11.0f, cy + 5.5f, cx - 4.0f, cy + 5.5f, STROKE, fg, bg);
   tft.drawWideLine(cx - 4.0f,  cy + 5.5f, cx + 5.0f, cy - 4.5f, STROKE, fg, bg);
   smoothTriangle(cx + 10.0f, cy - 8.5f,
                  cx + 2.5f,  cy - 7.0f,
                  cx + 9.0f,  cy - 1.0f, fg, bg);
 
-  // horni draha: zleva rovne, pak dolu doprava (uprostred se krizi)
+  // upper path: straight in from the left, then down to the right (they
+  // cross in the middle)
   tft.drawWideLine(cx - 11.0f, cy - 5.5f, cx - 5.0f, cy - 5.5f, STROKE, fg, bg);
   tft.drawWideLine(cx - 5.0f,  cy - 5.5f, cx - 0.5f, cy - 1.0f, STROKE, fg, bg);
   tft.drawWideLine(cx + 1.0f,  cy + 1.0f, cx + 5.0f, cy + 4.5f, STROKE, fg, bg);
@@ -67,14 +68,14 @@ void Icons::shuffle(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg) {
 }
 
 void Icons::repeat(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg, bool single) {
-  // horni sipka doprava
+  // top arrow, pointing right
   tft.drawWideLine(cx - 8.0f, cy - 6.5f, cx + 4.0f, cy - 6.5f, STROKE, fg, bg);
   smoothTriangle(cx + 9.5f, cy - 6.5f,
                  cx + 3.5f, cy - 10.5f,
                  cx + 3.5f, cy - 2.5f, fg, bg);
   tft.drawWideLine(cx - 8.0f, cy - 6.5f, cx - 8.0f, cy - 2.0f, STROKE, fg, bg);
 
-  // spodni sipka doleva
+  // bottom arrow, pointing left
   tft.drawWideLine(cx + 8.0f, cy + 6.5f, cx - 4.0f, cy + 6.5f, STROKE, fg, bg);
   smoothTriangle(cx - 9.5f, cy + 6.5f,
                  cx - 3.5f, cy + 2.5f,
@@ -82,7 +83,7 @@ void Icons::repeat(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg, bool single
   tft.drawWideLine(cx + 8.0f, cy + 6.5f, cx + 8.0f, cy + 2.0f, STROKE, fg, bg);
 
   if (single) {
-    // male "1" doprostred smycky
+    // a small "1" in the middle of the loop
     tft.drawWideLine(cx + 0.5f, cy - 2.5f, cx + 0.5f, cy + 2.5f, 2.2f, fg, bg);
     tft.drawWideLine(cx - 1.8f, cy - 1.0f, cx + 0.5f, cy - 2.8f, 2.0f, fg, bg);
   }
@@ -96,14 +97,14 @@ void Icons::volume(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg,
   smoothTriangle(cx - 6.0f, cy - 3.0f, cx - 1.0f, cy + 8.0f,
                  cx - 1.0f, cy - 8.0f, fg, bg);
 
-  if (level == 0) {                     // ztlumeno - prskrtnuti
+  if (level == 0) {                     // muted - the slash
     tft.drawWideLine(cx + 2.0f, cy - 5.0f, cx + 10.0f, cy + 5.0f, 2.2f, fg, bg);
     tft.drawWideLine(cx + 10.0f, cy - 5.0f, cx + 2.0f, cy + 5.0f, 2.2f, fg, bg);
     return;
   }
 
-  // Pozor na konvenci TFT_eSPI: uhel 0 je dole (6 hodin) a roste po
-  // smeru hodinovych rucicek, takze "doprava" je 270 stupnu.
+  // Mind the TFT_eSPI convention: angle 0 is at the bottom (6 o'clock)
+  // and grows clockwise, so "to the right" is 270 degrees.
   uint16_t weak = blend565(bg, fg, 70);
   tft.drawSmoothArc(cx - 1, cy, 7, 5, 235, 305,
                     (level >= 1) ? fg : weak, bg, true);
@@ -113,8 +114,8 @@ void Icons::volume(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg,
 
 void Icons::wifi(int16_t cx, int16_t cy, uint16_t fg, uint16_t dim,
                  uint8_t bars) {
-  // Ctyri sloupecky rostouci doprava - pri teto velikosti citelnejsi
-  // nez obloucky a nepotrebuje to vyhlazovani.
+  // Four bars growing to the right - at this size more legible than
+  // arcs, and it needs no antialiasing.
   for (uint8_t i = 0; i < 4; i++) {
     int16_t h = 3 + i * 3;
     int16_t x = cx - 7 + i * 4;
@@ -145,12 +146,12 @@ void Icons::activeDot(int16_t cx, int16_t cy, uint16_t fg, uint16_t bg) {
 }
 
 // =====================================================================
-//  Ikony pocasi
+//  Weather icons
 // =====================================================================
 namespace {
 
-// Vsechny tvary se pocitaji v pomeru k "size" (polovina sirky ikony),
-// takze jedna definice slouzi pro velkou i malou variantu.
+// Every shape is computed relative to "size" (half the icon width), so
+// one definition serves both the large and the small variant.
 struct Wx {
   float cx, cy, k;
   uint16_t fg, accent, bg;
@@ -173,7 +174,7 @@ void sunDisc(const Wx& w, float r, float rayIn, float rayOut, float thick) {
 
 void moonDisc(const Wx& w, float r) {
   tft.fillSmoothCircle(w.Xi(0), w.Yi(0), w.R(r), w.accent, w.bg);
-  // Vykrojenim druheho kolecka barvou pozadi vznikne srpek.
+  // Cutting a second circle out in the background color makes a crescent.
   tft.fillSmoothCircle(w.Xi(r * 0.55f), w.Yi(-r * 0.45f), w.R(r * 0.92f),
                        w.bg, w.accent);
 }
@@ -243,7 +244,7 @@ void Icons::weather(int16_t cx, int16_t cy, int16_t size, WxIcon ic, bool day,
     }
 
     case WxIcon::Cloud:
-      cloudShape(w, 3.0f, 0.78f, blend565(fg, bg, 96));   // zadni, tmavsi vrstva
+      cloudShape(w, 3.0f, 0.78f, blend565(fg, bg, 96));   // the back, darker layer
       cloudShape(w, 0.0f, 1.0f, fg);
       break;
 

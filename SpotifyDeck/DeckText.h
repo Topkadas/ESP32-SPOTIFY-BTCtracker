@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------
-//  DeckText.h  -  prevod UTF-8 na ASCII
+//  DeckText.h  -  UTF-8 to ASCII folding
 //
-//  Vestavene fonty TFT_eSPI (Font2/Font4) i Adafruit FreeFonts obsahuji
-//  jen znaky 0x20-0x7E. Kdyby se do nich poslalo "Dvořák" nebo
-//  "Beyoncé", vykreslily by se dva nahodne obdelniky misto pismene.
-//  Proto se vsechny retezce ze site nejdriv prozenou timhle prevodem:
-//  diakritika se odstrani, nezname znaky se nahradi otaznikem.
+//  The built-in TFT_eSPI fonts (Font2/Font4) and the Adafruit FreeFonts
+//  only carry characters 0x20-0x7E. Hand them an accented name the way
+//  Spotify really spells it - Dvorak with a hacek, Beyonce with an acute
+//  - and you get two random rectangles instead of the letter. So every
+//  string that comes off the network is folded here first: accents are
+//  stripped, unknown characters become a question mark.
 // ---------------------------------------------------------------------
 #pragma once
 
@@ -13,7 +14,7 @@
 
 namespace Text {
 
-// U+00C0 .. U+00FF  (dvoubajtove UTF-8 zacinajici 0xC3)
+// U+00C0 .. U+00FF  (two-byte UTF-8 starting with 0xC3)
 static const char LATIN1[65] =
     "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYPs"
     "aaaaaaaceeeeiiiidnooooo/ouuuuypy";
@@ -26,7 +27,7 @@ static const char LATIN_A[65] =
 static const char LATIN_B[65] =
     "lLlNnNnNnnNnOoOoOoOoRrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
 
-// Prevede UTF-8 retezec na ASCII. Vzdy ukonci nulou.
+// Folds a UTF-8 string down to ASCII. Always NUL-terminated.
 inline void fold(const char* src, char* dst, size_t cap) {
   if (!cap) return;
   if (!src) { dst[0] = '\0'; return; }
@@ -37,13 +38,13 @@ inline void fold(const char* src, char* dst, size_t cap) {
   while (*p && o + 1 < cap) {
     uint8_t c = *p;
 
-    if (c < 0x80) {                       // bezne ASCII
+    if (c < 0x80) {                       // plain ASCII
       dst[o++] = (char)c;
       p++;
       continue;
     }
 
-    if ((c & 0xE0) == 0xC0 && p[1]) {     // dvoubajtova sekvence
+    if ((c & 0xE0) == 0xC0 && p[1]) {     // two-byte sequence
       uint16_t cp = ((uint16_t)(c & 0x1F) << 6) | (p[1] & 0x3F);
       char out = '?';
       if (cp >= 0x00C0 && cp <= 0x00FF)      out = LATIN1[cp - 0x00C0];
@@ -55,7 +56,7 @@ inline void fold(const char* src, char* dst, size_t cap) {
       continue;
     }
 
-    if ((c & 0xF0) == 0xE0 && p[1] && p[2]) {   // tribajtova sekvence
+    if ((c & 0xF0) == 0xE0 && p[1] && p[2]) {   // three-byte sequence
       uint32_t cp = ((uint32_t)(c & 0x0F) << 12) |
                     ((uint32_t)(p[1] & 0x3F) << 6) | (p[2] & 0x3F);
       const char* rep = "?";
@@ -74,7 +75,7 @@ inline void fold(const char* src, char* dst, size_t cap) {
       continue;
     }
 
-    // Ctyribajtove (emoji) a vsechno ostatni zahodime.
+    // Four-byte sequences (emoji) and everything else get dropped.
     dst[o++] = '?';
     while (*p && (*p & 0xC0) == 0x80) p++;
     if (*p && *p >= 0x80) p++;
@@ -83,7 +84,7 @@ inline void fold(const char* src, char* dst, size_t cap) {
   dst[o] = '\0';
 }
 
-// Varianta, ktera prevadi "na miste" do stejneho bufferu.
+// Variant that folds "in place", back into the same buffer.
 inline void foldInPlace(char* buf, size_t cap) {
   if (!buf || !cap) return;
   char tmp[256];

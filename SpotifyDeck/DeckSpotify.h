@@ -1,26 +1,27 @@
 // ---------------------------------------------------------------------
-//  DeckSpotify.h  -  vlastni klient Spotify Web API
+//  DeckSpotify.h  -  a hand-written Spotify Web API client
 //
-//  Zadna externi Spotify knihovna. Duvody:
-//    * plna kontrola nad tim, co se parsuje (JSON filtr -> pametova stopa
-//      kolem 2 kB misto desitek kB),
-//    * spravne osetreni 204 / 401 / 403 / 429 vcetne Retry-After,
-//    * rotace refresh tokenu (Spotify ho obcas vymeni) s ulozenim do NVS,
-//    * stahovani obalu po obycejnem HTTP, cimz se usetri cely TLS buffer.
+//  No external Spotify library. The reasons:
+//    * full control over what gets parsed (a JSON filter -> a memory
+//      footprint around 2 kB instead of tens of kB),
+//    * correct handling of 204 / 401 / 403 / 429 including Retry-After,
+//    * refresh token rotation (Spotify swaps it now and then) with the
+//      new one saved to NVS,
+//    * artwork fetched over plain HTTP, which saves the whole TLS buffer.
 // ---------------------------------------------------------------------
 #pragma once
 
 #include <Arduino.h>
 
-// Vysledek jednoho dotazu na stav prehravace.
+// The outcome of a single player-state request.
 enum class PollResult : uint8_t {
-  Ok,            // 200 + platna data
-  Idle,          // 204 - nic nehraje / zadne aktivni zarizeni
-  NoNetwork,     // WiFi je dole nebo se nepodarilo pripojit
-  AuthFailed,    // refresh token je mrtvy -> nutne nove prihlaseni
-  Forbidden,     // 403 - typicky "Premium required"
-  RateLimited,   // 429 - cekame do retryAfter
-  Error          // cokoliv jineho
+  Ok,            // 200 + valid data
+  Idle,          // 204 - nothing playing / no active device
+  NoNetwork,     // WiFi is down or the connection failed
+  AuthFailed,    // the refresh token is dead -> sign in again
+  Forbidden,     // 403 - typically "Premium required"
+  RateLimited,   // 429 - we wait until retryAfter
+  Error          // anything else
 };
 
 enum class RepeatMode : uint8_t { Off = 0, Context = 1, Track = 2 };
@@ -31,13 +32,13 @@ struct PlayerState {
   bool       shuffle       = false;
   RepeatMode repeat        = RepeatMode::Off;
 
-  int16_t    volume        = -1;      // -1 = neznama / zarizeni ji neumi
+  int16_t    volume        = -1;      // -1 = unknown / the device has no volume
   bool       supportsVolume = false;
 
   uint32_t   progressMs    = 0;
   uint32_t   durationMs    = 0;
 
-  // Co server v tuhle chvili dovoli (z "actions.disallows").
+  // What the server allows right now (from "actions.disallows").
   bool canNext = true, canPrev = true, canSeek = true;
   bool canPause = true, canResume = true;
   bool canShuffle = true, canRepeat = true;
@@ -48,22 +49,22 @@ struct PlayerState {
   char album[96]      = {0};
   char deviceName[48] = {0};
   char artUrl[160]    = {0};
-  char artId[48]      = {0};   // posledni segment URL = stabilni klic do cache
+  char artId[48]      = {0};   // last URL segment = a stable cache key
   bool isEpisode      = false;
 };
 
 namespace Spotify {
 
-// Nacte ulozeny refresh token z NVS (kdyz tam neni, vezme ten ze secrets.h).
+// Loads the stored refresh token from NVS (falls back to the one in secrets.h).
 void begin();
 
-// Vrati true, pokud mame platny access token (pripadne ho obnovi).
+// Returns true if we hold a valid access token (refreshing it if needed).
 bool ensureToken();
 
-// Jeden dotaz na GET /v1/me/player. Pri PollResult::Ok naplni "out".
+// One GET /v1/me/player request. Fills "out" on PollResult::Ok.
 PollResult poll(PlayerState& out);
 
-// Ovladaci prikazy. Vraci true pri 2xx.
+// Control commands. Return true on 2xx.
 bool play();
 bool pause();
 bool next();
@@ -73,17 +74,17 @@ bool setVolume(int percent);
 bool setShuffle(bool on);
 bool setRepeat(RepeatMode mode);
 
-// Stahne JPEG obalu do cerstve alokovaneho bufferu (volajici dela free()).
-// Vraci delku v bajtech, 0 pri chybe.
+// Downloads the artwork JPEG into a freshly allocated buffer (the caller
+// does the free()). Returns the length in bytes, 0 on error.
 size_t fetchArtwork(const char* url, uint8_t** outBuffer);
 
-// Do kdy (millis) nesmime posilat dalsi dotaz - vyplnuje se pri 429.
+// Until when (millis) we must not send another request - set on a 429.
 uint32_t backoffUntil();
 
-// Posledni chybova hlaska pro zobrazeni na displeji.
+// The last error message, for showing on the display.
 const char* lastError();
 
-// True, kdyz je refresh token neplatny a je nutne projit prihlasenim znovu.
+// True when the refresh token is invalid and you have to sign in again.
 bool needsReauth();
 
 }  // namespace Spotify

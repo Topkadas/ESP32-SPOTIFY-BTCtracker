@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------
-//  DeckColor.h  -  barevna matematika pro 16bitovy displej
+//  DeckColor.h  -  color math for the 16-bit display
 //
-//  Vsechno inline, protoze se to vola v cyklech pres desetitisice pixelu.
-//  Vnitrni reprezentace je RGB888 v uint32_t (0x00RRGGBB), na displej
-//  jde az vysledek v RGB565.
+//  All inline, because it runs in loops over tens of thousands of pixels.
+//  The internal representation is RGB888 in a uint32_t (0x00RRGGBB);
+//  only the result goes to the display as RGB565.
 // ---------------------------------------------------------------------
 #pragma once
 
@@ -20,7 +20,7 @@ inline uint16_t to565(uint32_t rgb) {
 }
 
 inline uint32_t to888(uint16_t c) {
-  // Horni bity se kopiruji dolu, aby 0xFFFF davalo presne 0xFFFFFF.
+  // The top bits are copied down so that 0xFFFF yields exactly 0xFFFFFF.
   uint8_t r = (uint8_t)((c >> 11) & 0x1F);
   uint8_t g = (uint8_t)((c >> 5) & 0x3F);
   uint8_t b = (uint8_t)(c & 0x1F);
@@ -38,7 +38,7 @@ inline uint8_t R(uint32_t c) { return (uint8_t)(c >> 16); }
 inline uint8_t G(uint32_t c) { return (uint8_t)(c >> 8); }
 inline uint8_t B(uint32_t c) { return (uint8_t)c; }
 
-// Linearni prechod mezi dvema barvami. t = 0..255 (0 = a, 255 = b).
+// Linear blend between two colors. t = 0..255 (0 = a, 255 = b).
 inline uint32_t mix(uint32_t a, uint32_t b, uint8_t t) {
   uint16_t it = 255 - t;
   return rgb((uint8_t)((R(a) * it + R(b) * t) / 255),
@@ -46,7 +46,7 @@ inline uint32_t mix(uint32_t a, uint32_t b, uint8_t t) {
              (uint8_t)((B(a) * it + B(b) * t) / 255));
 }
 
-// Ztmaveni / zesvetleni. f = 0..255, kde 255 nemeni nic.
+// Darken / brighten. f = 0..255, where 255 changes nothing.
 inline uint32_t scale(uint32_t c, uint16_t f) {
   uint16_t r = (uint16_t)R(c) * f / 255;
   uint16_t g = (uint16_t)G(c) * f / 255;
@@ -56,7 +56,7 @@ inline uint32_t scale(uint32_t c, uint16_t f) {
              (uint8_t)min<uint16_t>(b, 255));
 }
 
-// Vnimana svetlost 0..255 (ITU-R BT.601 vahy, staci a je to cele celociselne).
+// Perceived lightness 0..255 (ITU-R BT.601 weights, good enough and all integer).
 inline uint8_t luma(uint32_t c) {
   return (uint8_t)(((uint32_t)R(c) * 77 + (uint32_t)G(c) * 150 +
                     (uint32_t)B(c) * 29) >> 8);
@@ -105,17 +105,17 @@ inline uint32_t fromHsv(uint16_t h, uint8_t s, uint8_t v) {
   }
 }
 
-// Barva pro zvyrazneni: zachova odstin obalu, ale vytahne sytost a jas
-// tak, aby byla citelna na tmavem pozadi. Sedive obaly nechá sede.
+// Accent color: keeps the hue of the artwork but pushes saturation and
+// value up so it stays readable on a dark background. Gray art stays gray.
 inline uint32_t accentFrom(uint32_t base) {
   Hsv h = toHsv(base);
-  if (h.s < 40) return rgb(0xE6, 0xEC, 0xF5);            // cernobily obal
+  if (h.s < 40) return rgb(0xE6, 0xEC, 0xF5);            // monochrome art
   uint8_t s = (uint8_t)max<int>(h.s, 150);
   return fromHsv(h.h, s, 245);
 }
 
-// Ztmaveny odstin obalu pro pozadi (pouzije se, kdyz je blur vypnuty
-// nebo kdyz se obal nepodarilo stahnout).
+// Darkened shade of the artwork for the background (used when blur is
+// off or when the artwork could not be downloaded).
 inline uint32_t shadeFrom(uint32_t base, uint8_t value) {
   Hsv h = toHsv(base);
   uint8_t s = (uint8_t)min<int>(h.s, 170);

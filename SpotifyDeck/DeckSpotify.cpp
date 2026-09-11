@@ -16,10 +16,10 @@ Preferences prefs;
 
 String   accessToken;
 String   refreshToken;
-String   authHeader;              // "Bearer ..." - skládá se jen pri zmene tokenu
+String   authHeader;              // "Bearer ..." - rebuilt only when the token changes
 uint32_t tokenExpiresAt = 0;      // millis()
 uint32_t rateLimitUntil = 0;      // millis()
-bool     rateLimited    = false;  // viz timeReached() nize
+bool     rateLimited    = false;  // see timeReached() below
 bool     reauthNeeded   = false;
 char     errorMsg[80]   = {0};
 
@@ -34,31 +34,32 @@ void setError(const char* fmt, ...) {
   LOGF("[spotify] %s\n", errorMsg);
 }
 
-// Retezce ze Spotify chodi v UTF-8, ale displej umi jen ASCII - diakritika
-// by se vykreslila jako prazdne obdelniky. Proto se prevadeji.
+// Strings from Spotify arrive as UTF-8, but the display only does ASCII -
+// accents would come out as blank rectangles. Hence the folding.
 void copyStr(char* dst, size_t cap, const char* src) {
   Text::fold(src, dst, cap);
 }
 
-// Pro identifikatory (track id, URL obalu) - ty jsou uz ciste ASCII
-// a prevod by je mohl jen rozbit.
+// For identifiers (track id, artwork URL) - those are pure ASCII already
+// and folding could only break them.
 void copyRaw(char* dst, size_t cap, const char* src) {
   if (!src) { dst[0] = '\0'; return; }
   strncpy(dst, src, cap - 1);
   dst[cap - 1] = '\0';
 }
 
-// millis()-bezpecne porovnani (funguje i pres pretecení po ~49 dnech).
+// A millis()-safe comparison (survives the ~49 day wrap-around).
 //
-// Pozor: je to bezpecne jen proti terminu, ktery sam vznikl z nedavneho
-// millis(). Nula jako "zadny termin" tady NEFUNGUJE - vyraz se pak
-// zvrhne na (int32_t)millis() >= 0, coz je od 24,9. do 49,7. dne behu
-// nepravda. Proto se "zadny termin" pozna zvlast booleanem.
+// Careful: it is only safe against a deadline that itself came from a
+// recent millis(). Zero as "no deadline" does NOT work here - the
+// expression then degenerates into (int32_t)millis() >= 0, which is
+// false between day 24.9 and day 49.7 of uptime. So "no deadline" is
+// tracked by a separate boolean.
 inline bool timeReached(uint32_t deadline) {
   return (int32_t)(millis() - deadline) >= 0;
 }
 
-// Plati rate limit? Kdyz uz vyprsel, rovnou se priznak zhasne.
+// Is the rate limit in force? If it has expired, clear the flag right away.
 inline bool rateLimitActive() {
   if (!rateLimited) return false;
   if (timeReached(rateLimitUntil)) { rateLimited = false; return false; }
@@ -86,7 +87,7 @@ void noteRateLimit(const Http::Result& r) {
   int secs = r.retryAfter > 0 ? r.retryAfter : 30;
   rateLimitUntil = millis() + (uint32_t)secs * 1000UL;
   rateLimited    = true;
-  setError("Rate limit, cekam %d s", secs);
+  setError("Rate limited, waiting %d s", secs);
 }
 
 int sendCommand(const char* verb, const String& path) {
@@ -97,7 +98,7 @@ int sendCommand(const char* verb, const String& path) {
   Http::Result r = Http::command(verb, String(API) + path, authHeader.c_str());
 
   if (r.code == 429) noteRateLimit(r);
-  if (r.code == 403) setError("403 - potrebujes Spotify Premium");
+  if (r.code == 403) setError("403 - you need Spotify Premium");
   if (r.code == 401) { accessToken = ""; tokenExpiresAt = 0; }
   if (r.code < 0)    setError("%s", Http::lastError());
 
@@ -107,8 +108,9 @@ int sendCommand(const char* verb, const String& path) {
 
 bool commandOk(int code) { return code >= 200 && code < 300; }
 
-// Z URL obalu vytahne posledni segment - je to obsahovy hash, takze
-// se hodi jako klic do cache i jako test "je to porad stejny obal?".
+// Pulls the last segment out of the artwork URL - it is a content hash,
+// so it works both as a cache key and as an "is this still the same
+// cover?" test.
 void extractArtId(const char* url, char* dst, size_t cap) {
   dst[0] = '\0';
   if (!url || !*url) return;
@@ -116,8 +118,9 @@ void extractArtId(const char* url, char* dst, size_t cap) {
   copyRaw(dst, cap, slash ? slash + 1 : url);
 }
 
-// Vybere obrazek nejblizsi pozadovane sirce. Spotify posila 640/300/64,
-// ale u podcastu nebo starych alb muze byt polozek min a width null.
+// Picks the image closest to the requested width. Spotify sends 640/300/64,
+// but for podcasts or old albums there may be fewer entries and width
+// may be null.
 void pickArtwork(JsonArrayConst images, int preferred, PlayerState& st) {
   const char* best = nullptr;
   int bestScore = INT32_MAX;
@@ -139,9 +142,9 @@ void pickArtwork(JsonArrayConst images, int preferred, PlayerState& st) {
   }
 }
 
-// "actions" prichazi na dratu jako { "disallows": { "pausing": true } }
-// a obsahuje jen klice, ktere jsou true. Dokumentace uvadi plochou
-// variantu - osetrujeme obe a chybejici klic znamena "smi se".
+// "actions" comes over the wire as { "disallows": { "pausing": true } }
+// and only carries the keys that are true. The documentation shows a flat
+// variant - we handle both, and a missing key means "allowed".
 bool allowed(JsonVariantConst actions, const char* key) {
   JsonVariantConst dis = actions["disallows"];
   if (!dis.isNull()) return !(dis[key] | false);
@@ -152,7 +155,7 @@ bool allowed(JsonVariantConst actions, const char* key) {
 }  // namespace
 
 // =====================================================================
-//  Verejne API
+//  Public API
 // =====================================================================
 void Spotify::begin() {
   prefs.begin("deck", false);
@@ -161,9 +164,9 @@ void Spotify::begin() {
 
   if (refreshToken.isEmpty()) {
     refreshToken = SPOTIFY_REFRESH_TOKEN;
-    LOGLN("[spotify] refresh token ze secrets.h");
+    LOGLN("[spotify] refresh token from secrets.h");
   } else {
-    LOGLN("[spotify] refresh token z NVS");
+    LOGLN("[spotify] refresh token from NVS");
   }
 
   accessToken    = "";
@@ -178,8 +181,8 @@ bool Spotify::ensureToken() {
   if (WiFi.status() != WL_CONNECTED) return false;
   if (!accessToken.isEmpty() && !timeReached(tokenExpiresAt)) return true;
 
-  if (refreshToken.isEmpty() || refreshToken == "sem_vloz_refresh_token") {
-    setError("Chybi refresh token");
+  if (refreshToken.isEmpty() || refreshToken == "paste_refresh_token_here") {
+    setError("No refresh token");
     reauthNeeded = true;
     return false;
   }
@@ -202,9 +205,9 @@ bool Spotify::ensureToken() {
 
   if (!r.ok()) {
     const char* err = doc["error"] | "";
-    // invalid_grant = token byl odvolan nebo je starsi nez 6 mesicu
+    // invalid_grant = the token was revoked or is older than 6 months
     if (strcmp(err, "invalid_grant") == 0) {
-      setError("Refresh token neplatny - prihlas se znovu");
+      setError("Refresh token invalid - sign in again");
       reauthNeeded = true;
     } else if (r.code == 429) {
       noteRateLimit(r);
@@ -215,7 +218,7 @@ bool Spotify::ensureToken() {
   }
 
   const char* at = doc["access_token"] | (const char*)nullptr;
-  if (!at) { setError("Odpoved bez access_token"); return false; }
+  if (!at) { setError("Response has no access_token"); return false; }
 
   accessToken = at;
   authHeader  = "Bearer " + accessToken;
@@ -224,18 +227,18 @@ bool Spotify::ensureToken() {
   if (ttl > TOKEN_EARLY_REFRESH_S) ttl -= TOKEN_EARLY_REFRESH_S;
   tokenExpiresAt = millis() + ttl * 1000UL;
 
-  // Spotify muze pri obnove vratit novy refresh token. Kdyz to udela,
-  // ten stary prestane platit - musime si ho ulozit natrvalo.
+  // On a refresh Spotify may hand back a new refresh token. When it does,
+  // the old one stops working - so the new one has to be stored for good.
   const char* newRefresh = doc["refresh_token"] | (const char*)nullptr;
   if (newRefresh && *newRefresh && refreshToken != newRefresh) {
     refreshToken = newRefresh;
     prefs.begin("deck", false);
     prefs.putString("rtok", refreshToken);
     prefs.end();
-    LOGLN("[spotify] refresh token rotovan a ulozen do NVS");
+    LOGLN("[spotify] refresh token rotated and saved to NVS");
   }
 
-  LOGF("[spotify] novy access token, plati %lu s\n", (unsigned long)ttl);
+  LOGF("[spotify] new access token, valid for %lu s\n", (unsigned long)ttl);
   return true;
 }
 
@@ -245,12 +248,13 @@ PollResult Spotify::poll(PlayerState& out) {
   if (!ensureToken())
     return reauthNeeded ? PollResult::AuthFailed : PollResult::Error;
 
-  // Parametr "market" zpusobi, ze Spotify vynecha seznam dostupnych trhu
-  // (~1,5 kB na kazdou skladbu) a nahradi ho jednim booleanem.
+  // The "market" parameter makes Spotify drop the list of available
+  // markets (~1.5 kB per track) and replace it with a single boolean.
   String url = String(API) + "/v1/me/player?market=" + SPOTIFY_MARKET +
                "&additional_types=track,episode";
 
-  // Filtr srazi odpoved z nekolika kB na zhruba 1 kB uzitecnych dat.
+  // The filter cuts the response from several kB down to about 1 kB of
+  // data we actually use.
   JsonDocument filter;
   filter["is_playing"]             = true;
   filter["progress_ms"]            = true;
@@ -268,7 +272,7 @@ PollResult Spotify::poll(PlayerState& out) {
   filter["item"]["artists"][0]["name"] = true;
   filter["item"]["album"]["name"]      = true;
   filter["item"]["album"]["images"]    = true;
-  filter["item"]["images"]             = true;   // podcast epizoda
+  filter["item"]["images"]             = true;   // podcast episode
   filter["item"]["show"]["name"]       = true;
 
   JsonDocument doc;
@@ -278,10 +282,10 @@ PollResult Spotify::poll(PlayerState& out) {
   if (r.code == 401) {
     accessToken = "";
     tokenExpiresAt = 0;
-    return PollResult::Error;        // priste se obnovi token a zkusi znovu
+    return PollResult::Error;        // next time we refresh the token and retry
   }
   if (r.code == 403) {
-    setError("403 - Spotify Premium je nutne");
+    setError("403 - Spotify Premium required");
     return PollResult::Forbidden;
   }
   if (r.code == 429) { noteRateLimit(r); return PollResult::RateLimited; }
@@ -316,7 +320,7 @@ PollResult Spotify::poll(PlayerState& out) {
   }
 
   JsonVariantConst item = doc["item"];
-  if (item.isNull()) {          // reklama nebo neznamy typ obsahu
+  if (item.isNull()) {          // an ad or an unknown content type
     out = st;
     return PollResult::Ok;
   }
@@ -336,7 +340,7 @@ PollResult Spotify::poll(PlayerState& out) {
     if (item["images"].is<JsonArrayConst>())
       pickArtwork(item["images"].as<JsonArrayConst>(), 300, st);
   } else {
-    // Spojit az tri interprety, at "feat." neni utnute.
+    // Join up to three artists, so a "feat." does not get cut off.
     String artists;
     if (item["artists"].is<JsonArrayConst>()) {
       int n = 0;
@@ -360,7 +364,7 @@ PollResult Spotify::poll(PlayerState& out) {
 }
 
 // ---------------------------------------------------------------------
-//  Ovladani
+//  Controls
 // ---------------------------------------------------------------------
 bool Spotify::play()     { return commandOk(sendCommand("PUT",  "/v1/me/player/play")); }
 bool Spotify::pause()    { return commandOk(sendCommand("PUT",  "/v1/me/player/pause")); }
@@ -391,24 +395,25 @@ bool Spotify::setRepeat(RepeatMode mode) {
 }
 
 // ---------------------------------------------------------------------
-//  Obal alba
+//  Album art
 // ---------------------------------------------------------------------
 size_t Spotify::fetchArtwork(const char* url, uint8_t** outBuffer) {
   *outBuffer = nullptr;
   if (!url || !*url || WiFi.status() != WL_CONNECTED) return 0;
 
-  // i.scdn.co servíruje obaly i po obycejnem HTTP. Je to verejny obrazek
-  // a usetri to cely TLS buffer (~45 kB) i handshake - na ESP32 bez PSRAM
-  // je to rozdil mezi "jde to" a "dochazi pamet".
+  // i.scdn.co serves the artwork over plain HTTP too. It is a public
+  // image, and this saves the entire TLS buffer (~45 kB) plus the
+  // handshake - on an ESP32 without PSRAM that is the difference between
+  // "it works" and "out of memory".
   String plainUrl(url);
   if (plainUrl.startsWith("https://")) plainUrl = "http://" + plainUrl.substring(8);
 
   size_t len = Http::download(plainUrl, outBuffer, ART_MAX_BYTES);
   if (!len) {
-    setError("Obal: %s", Http::lastError());
+    setError("Artwork: %s", Http::lastError());
     return 0;
   }
-  LOGF("[spotify] obal %u B\n", (unsigned)len);
+  LOGF("[spotify] artwork %u B\n", (unsigned)len);
   return len;
 }
 

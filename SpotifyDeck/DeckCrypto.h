@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------
-//  DeckCrypto.h  -  stranka s kurzem bitcoinu
+//  DeckCrypto.h  -  the bitcoin price page
 //
-//  Data z verejneho Binance API (bez klice, bez registrace, stedry limit).
-//  Kurz CZK Binance nema, takze se pocita pres dennni kurz CNB.
-//  Klepnutim na cenu se prepina mena USD -> EUR -> CZK.
+//  Data from the public Binance API (no key, no sign-up, generous limit).
+//  Binance has no CZK pair, so it is computed via the daily CNB rate.
+//  Tapping the price cycles the currency USD -> EUR -> CZK.
 // ---------------------------------------------------------------------
 #pragma once
 

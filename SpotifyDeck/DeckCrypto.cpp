@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr int SERIES_MAX = 48;          // 48 hodinovych svicek = 2 dny
+constexpr int SERIES_MAX = 48;          // 48 hourly candles = 2 days
 
 enum Fiat : uint8_t { FIAT_USD = 0, FIAT_EUR = 1, FIAT_CZK = 2 };
 
@@ -23,11 +23,11 @@ const char* FIAT_NAME[3] = {"USD", "EUR", "CZK"};
 Fiat     g_fiat = FIAT_USD;
 bool     g_valid = false;
 float    g_price = 0;
-float    g_change = 0;                  // % za 24 h
+float    g_change = 0;                  // % over 24 h
 float    g_high = 0, g_low = 0;
 float    g_series[SERIES_MAX];
 int      g_seriesLen = 0;
-float    g_usdCzk = 0;                  // kurz CNB
+float    g_usdCzk = 0;                  // the CNB rate
 uint32_t g_czkFetchedAt = 0;
 char     g_error[64] = {0};
 char     g_updated[8] = {0};
@@ -40,7 +40,7 @@ constexpr const char* CNB_URL =
     "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/"
     "kurzy-devizoveho-trhu/denni_kurz.txt";
 
-// Binance ma par BTCEUR, ale BTCCZK ne - CZK se proto pocita z USD.
+// Binance has a BTCEUR pair but no BTCCZK - so CZK is derived from USD.
 const char* symbolFor(Fiat f) { return (f == FIAT_EUR) ? "BTCEUR" : "BTCUSDT"; }
 
 float conversion() {
@@ -48,7 +48,7 @@ float conversion() {
   return 1.0f;
 }
 
-// Denní kurz CNB je obycejny textovy soubor:
+// The daily CNB rate is a plain text file:
 //   USA|dolar|1|USD|21,456
 bool fetchCzkRate() {
   String txt;
@@ -61,20 +61,20 @@ bool fetchCzkRate() {
   int lineEnd = txt.indexOf('\n', pos);
   String tail = txt.substring(pos + 5, lineEnd < 0 ? txt.length() : lineEnd);
   tail.trim();
-  tail.replace(",", ".");              // CNB pouziva desetinnou carku
+  tail.replace(",", ".");              // the CNB uses a decimal comma
   float v = tail.toFloat();
   if (v <= 0) return false;
 
   g_usdCzk = v;
   g_czkFetchedAt = millis();
-  LOGF("[btc] kurz CNB: 1 USD = %.3f CZK\n", g_usdCzk);
+  LOGF("[btc] CNB rate: 1 USD = %.3f CZK\n", g_usdCzk);
   return true;
 }
 
-// Odpoved /api/v3/klines je pole poli:
-//   [[cas,"open","high","low","close","objem",...], ...]
-// Rozparsovat to pres ArduinoJson by stalo desitky kB, takze se z textu
-// vytahne rovnou jen pate pole ("close") kazde svicky.
+// The /api/v3/klines response is an array of arrays:
+//   [[time,"open","high","low","close","volume",...], ...]
+// Running that through ArduinoJson would cost tens of kB, so the fifth
+// field ("close") of each candle is pulled straight out of the text.
 int parseCloses(const String& json, float* out, int maxOut) {
   int n = 0, depth = 0, field = 0;
   bool inStr = false;
@@ -88,7 +88,7 @@ int parseCloses(const String& json, float* out, int maxOut) {
         inStr = false;
         if (depth == 2 && field == 4) {
           out[n++] = num.toFloat();
-          field = 99;                   // zbytek svicky uz nas nezajima
+          field = 99;                   // the rest of the candle is of no interest
         }
       } else {
         num += c;
@@ -110,7 +110,8 @@ int parseCloses(const String& json, float* out, int maxOut) {
 void formatPrice(float v, char* out, size_t cap) {
   if (v <= 0) { snprintf(out, cap, "-"); return; }
 
-  // Oddelovac tisicu mezerou, at je to citelne i pres pul obrazovky.
+  // Space as the thousands separator, so it stays readable even at half
+  // the screen wide.
   long whole = (long)v;
   char raw[16];
   snprintf(raw, sizeof(raw), "%ld", whole);
@@ -149,7 +150,7 @@ bool Crypto::poll() {
 
   const char* sym = symbolFor(g_fiat);
 
-  // --- cena a 24h statistiky ---
+  // --- price and 24h statistics ---
   JsonDocument filter;
   filter["lastPrice"]         = true;
   filter["priceChangePercent"] = true;
@@ -171,7 +172,7 @@ bool Crypto::poll() {
   g_high   = atof(doc["highPrice"] | "0") * k;
   g_low    = atof(doc["lowPrice"] | "0") * k;
 
-  // --- graf za 48 hodin ---
+  // --- the 48 hour chart ---
   String klines;
   String kurl = String(BINANCE) + "/api/v3/klines?symbol=" + sym +
                 "&interval=1h&limit=" + String(SERIES_MAX);
@@ -185,8 +186,8 @@ bool Crypto::poll() {
   if (getLocalTime(&tmNow, 5)) strftime(g_updated, sizeof(g_updated), "%H:%M", &tmNow);
 
   g_valid = (g_price > 0);
-  g_nextDelay = 60000;                  // minuta staci, limit Binance je stedry
-  LOGF("[btc] %.2f %s (%.2f %%), %d bodu grafu\n", g_price, FIAT_NAME[g_fiat],
+  g_nextDelay = 60000;                  // a minute is plenty, the Binance limit is generous
+  LOGF("[btc] %.2f %s (%.2f %%), %d chart points\n", g_price, FIAT_NAME[g_fiat],
        g_change, g_seriesLen);
   return g_valid;
 }
@@ -194,7 +195,7 @@ bool Crypto::poll() {
 uint32_t Crypto::nextPollDelay() { return g_nextDelay; }
 
 // ---------------------------------------------------------------------
-//  Vykresleni
+//  Drawing
 // ---------------------------------------------------------------------
 namespace {
 
@@ -232,7 +233,7 @@ void drawChart() {
   float span = hi - lo;
   if (span <= 0) span = 1;
 
-  // Vyplnena plocha pod krivkou - jeden svisly pruh na kazdy sloupec.
+  // The filled area under the curve - one vertical bar per column.
   uint16_t fill = Draw::blend(bg, Draw::cAccent, 58);
   int16_t prevX = -1, prevY = -1;
 
@@ -254,7 +255,7 @@ void drawChart() {
     prevY = y;
   }
 
-  // Posledni bod zvyraznit teckou.
+  // Mark the last point with a dot.
   if (prevX >= 0) tft.fillSmoothCircle(prevX, prevY, 3, Draw::cText, bg);
 
   char loTxt[20], hiTxt[20];
@@ -309,7 +310,7 @@ void Crypto::draw(bool full) {
   formatPrice(g_price, price, sizeof(price));
   Draw::bigText(14, 52, price, &FreeSansBold24pt7b, Draw::cText, TL_DATUM);
 
-  // Zmena za 24 h jako barevny stitek
+  // The 24 h change as a colored chip
   bool up = (g_change >= 0);
   uint16_t cc = up ? Draw::cGood : Draw::cBad;
   char chg[16];
@@ -331,7 +332,7 @@ void Crypto::tick() {}
 bool Crypto::handleTouch(const TouchEvent& ev) {
   if (!ev.released || !ev.tap) return false;
 
-  // Horni polovina = prepnout menu, dolni = vynutit obnovu.
+  // Top half = switch the currency, bottom half = force a refresh.
   if (ev.y < 128) {
     g_fiat = (Fiat)((g_fiat + 1) % 3);
     prefs.begin("deck", false);

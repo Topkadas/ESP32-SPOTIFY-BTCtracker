@@ -12,14 +12,14 @@
 #include "DeckTft.h"
 #include "DeckTouch.h"
 
-// Jedina instance displeje pro cely projekt.
+// The single display instance for the whole project.
 TFT_eSPI tft = TFT_eSPI();
 
 namespace {
 
-// Kreslici naradi (sprite, paleta, sklenene panely) je sdilene se
-// vsemi strankami - viz DeckDraw. Tady jsou jen kratke aliasy, aby
-// zbytek souboru zustal citelny.
+// The drawing tools (sprite, palette, glass panels) are shared with every
+// page - see DeckDraw. These are just short aliases, so the rest of the
+// file stays readable.
 using Draw::cAccent;
 using Draw::cPanel;
 using Draw::cPanelHi;
@@ -46,7 +46,7 @@ inline void glassPanel(int16_t x, int16_t y, int16_t w, int16_t h,
   Draw::glass(x, y, w, h, r, darken);
 }
 
-// --- co uz je vykreslene (aby se neprekreslovalo zbytecne) ------------
+// --- what is already drawn (so nothing is repainted needlessly) ------
 char       lastTitle[160]  = {0};
 char       lastArtist[160] = {0};
 char       lastAlbum[96]   = {0};
@@ -62,30 +62,31 @@ bool       lastShuffle     = false;
 RepeatMode lastRepeat      = RepeatMode::Off;
 uint8_t    lastBars        = 255;
 
-// --- bezici nazev ----------------------------------------------------
+// --- marquee title ---------------------------------------------------
 int16_t  titleW    = 0;
 int16_t  titleOff  = 0;
 int8_t   titleDir  = 1;
 uint32_t titleNext = 0;
 
-// --- toast ve stavovem radku -----------------------------------------
+// --- toast in the status bar -----------------------------------------
 char     toastText[40] = {0};
 uint32_t toastUntil    = 0;
 
-// --- tecky stranek ve stavovem radku ----------------------------------
+// --- page dots in the status bar --------------------------------------
 uint8_t pageCount  = 1;
 uint8_t pageActive = 0;
 
-// --- podsviceni ------------------------------------------------------
+// --- backlight -------------------------------------------------------
 uint16_t blDuty   = BL_MAX;
 uint16_t blTarget = BL_MAX;
 bool     blReady  = false;
 bool     ledOk    = false;
 bool     blDipped = false;
-uint16_t blDipFrom = BL_MAX;   // jas, na ktery se po prekresleni vratime
+uint16_t blDipFrom = BL_MAX;   // brightness we return to after the repaint
 
-// Jedine misto, kde se sahá na podsviceni. Resi polaritu i to, jestli
-// se povedlo pripojit PWM - zbytek kodu uz jen rika, jak moc ma svitit.
+// The only place that touches the backlight. It handles the polarity and
+// whether PWM attached at all - the rest of the code just says how
+// brightly it should glow.
 void blWrite(uint16_t duty) {
   duty = constrain(duty, (uint16_t)0, (uint16_t)BL_MAX);
 #if BL_ACTIVE_LOW
@@ -107,13 +108,13 @@ void formatTime(uint32_t ms, char* out, size_t cap) {
 }
 
 // =====================================================================
-//  Casti obrazovky
+//  Screen parts
 // =====================================================================
 void drawButton(uint8_t index, const PlayerState& st, bool pressed) {
   int16_t cx = CTRL_CX(index);
   int16_t bw = CTRL_W / CTRL_COUNT - 4;
 
-  // plocha tlacitka zpatky na "sklo"
+  // the button area back to "glass"
   glassPanel(cx - bw / 2, CTRL_Y + 1, bw, CTRL_H - 2, 0, 108);
 
   uint16_t bg = cPanel;
@@ -133,11 +134,12 @@ void drawButton(uint8_t index, const PlayerState& st, bool pressed) {
       Icons::prev(cx, CTRL_CY, st.canPrev ? cText : cText3, bg);
       break;
     case 2: {
-      // Jedine tlacitko, ktere ma vlastni plochu - je to kotva cele
-      // obrazovky a na prvni pohled rekne, jestli hudba bezi.
+      // The only button with a surface of its own - it is the anchor of
+      // the whole screen and tells you at a glance whether music is
+      // playing.
       uint16_t disc = st.isPlaying ? cAccent : blend565(cPanel, cText, 44);
       tft.fillSmoothCircle(cx, CTRL_CY, 16, disc, bg);
-      // Na svetlem akcentu (napr. brat-zelena) musi byt ikona tmava.
+      // On a light accent (brat green, say) the icon has to be dark.
       uint16_t ink = (Col::luma(Col::to888(disc)) > 150)
                          ? Col::to565(Col::rgb(0x0A, 0x0D, 0x12))
                          : cText;
@@ -213,12 +215,13 @@ void drawProgressBar(uint32_t progressMs, uint32_t durationMs) {
 }  // namespace
 
 // =====================================================================
-//  Verejne API
+//  Public API
 // =====================================================================
 void Ui::begin() {
-  // Podsviceni zapnout jako uplne prvni vec a natvrdo. Kdyz User_Setup.h
-  // nedefinuje TFT_BL (coz je bezna konfigurace), nikdo jiny na GPIO21
-  // nesahne a displej zustane tmavy, i kdyz do nej kreslime spravne.
+  // Turn the backlight on as the very first thing, and hard. If
+  // User_Setup.h does not define TFT_BL (a common configuration), nobody
+  // else touches GPIO21 and the display stays dark even though we are
+  // drawing into it correctly.
   pinMode(PIN_BACKLIGHT, OUTPUT);
   digitalWrite(PIN_BACKLIGHT, BL_ACTIVE_LOW ? LOW : HIGH);
 
@@ -226,23 +229,24 @@ void Ui::begin() {
   tft.setRotation(Touch::rotation());
   tft.setSwapBytes(true);
   tft.fillScreen(TFT_BLACK);
-  LOGF("[ui] displej %dx%d, rotace %u\n", tft.width(), tft.height(),
+  LOGF("[ui] display %dx%d, rotation %u\n", tft.width(), tft.height(),
        Touch::rotation());
 
 #if BL_SELFTEST
-  // Hledani pinu podsviceni. Rodina CYD ma podsviceni podle modelu na
-  // ruznych pinech - 2432S028 na GPIO21, 2432S024 podle vseho na GPIO27.
-  // Projedou se kandidati, kazdy chvili HIGH a chvili LOW, a uzivatel
-  // rekne, u ktereho cisla se displej rozsvitil.
+  // Hunting for the backlight pin. Across the CYD family the backlight
+  // sits on different pins depending on the model - the 2432S028 on
+  // GPIO21, the 2432S024 apparently on GPIO27. The candidates are walked
+  // through, each held HIGH for a while and then LOW, and the user says
+  // at which number the display lit up.
   //
-  // Zamerne se vynechavaji piny, na kterych visi displej (2, 12, 13, 14,
-  // 15), UART (1, 3) a strapping pin 0.
+  // The pins the display hangs off (2, 12, 13, 14, 15), the UART (1, 3)
+  // and strapping pin 0 are deliberately left out.
   {
     const uint8_t candidates[] = {27, 21, 16, 5};
     const int n = sizeof(candidates) / sizeof(candidates[0]);
 
-    // Cely sweep se nekolikrat zopakuje a kazda faze drzi dost dlouho,
-    // aby se stihlo precist velke cislo pinu na obrazovce.
+    // The whole sweep repeats a few times and each phase holds long
+    // enough to read the large pin number off the screen.
     for (int round = 1; round <= BL_SELFTEST; round++) {
       for (int i = 0; i < n; i++) {
         const uint8_t pin = candidates[i];
@@ -253,7 +257,7 @@ void Ui::begin() {
 
           char big[16], sub[48];
           snprintf(big, sizeof(big), "GPIO %d", (int)pin);
-          snprintf(sub, sizeof(sub), "%s   -   kolo %d/%d",
+          snprintf(sub, sizeof(sub), "%s   -   round %d/%d",
                    high ? "HIGH" : "LOW", round, BL_SELFTEST);
 
           tft.fillScreen(TFT_WHITE);
@@ -265,31 +269,33 @@ void Ui::begin() {
           tft.drawString(sub, SCREEN_W / 2, SCREEN_H / 2 + 34);
           tft.setFreeFont(nullptr);
 
-          LOGF("[bl-test] kolo %d: GPIO%d = %s\n", round, (int)pin,
+          LOGF("[bl-test] round %d: GPIO%d = %s\n", round, (int)pin,
                high ? "HIGH" : "LOW");
           delay(4000);
         }
 
-        // Pin zase pustit, at nedrzi neco, co k nemu nepatri.
+        // Release the pin again, so it does not hold something that is
+        // not its business.
         pinMode(pin, INPUT);
       }
     }
-    LOGLN("[bl-test] hotovo - u ktereho GPIO se rozsvitilo?");
+    LOGLN("[bl-test] done - at which GPIO did it light up?");
   }
 #endif
 
-  // LEDC az PO tft.init() - init() umi sahnout na TFT_BL a prepsal by to.
+  // LEDC only AFTER tft.init() - init() may touch TFT_BL and would
+  // overwrite it.
   blReady = ledcAttach(PIN_BACKLIGHT, BL_PWM_FREQ, BL_PWM_BITS);
   blDuty  = BL_MAX;
   blWrite(BL_MAX);
-  LOGF("[ui] podsviceni: %s, polarita %s\n",
-       blReady ? "PWM" : "napevno (LEDC selhalo)",
+  LOGF("[ui] backlight: %s, polarity %s\n",
+       blReady ? "PWM" : "fixed (LEDC failed)",
        BL_ACTIVE_LOW ? "ACTIVE LOW" : "ACTIVE HIGH");
 
   Draw::begin();
 
 #if FEAT_RGB_LED
-  // RGB LED na desce je ACTIVE LOW - strida se tedy obraci.
+  // The on-board RGB LED is ACTIVE LOW - so the duty cycle is inverted.
   ledOk = ledcAttach(PIN_LED_R, LED_PWM_FREQ, LED_PWM_BITS) &&
           ledcAttach(PIN_LED_G, LED_PWM_FREQ, LED_PWM_BITS) &&
           ledcAttach(PIN_LED_B, LED_PWM_FREQ, LED_PWM_BITS);
@@ -429,8 +435,9 @@ void Ui::updateVolume(int volume, bool supported) {
 }
 
 void Ui::invalidateStatus() {
-  // Prekresleni cele stranky smaze i stavovy radek, ale updateStatus()
-  // o tom nevi a pri nezmenenych hodnotach by ho uz nevykreslil.
+  // Repainting the whole page wipes the status bar too, but
+  // updateStatus() does not know that and would not draw it again while
+  // the values are unchanged.
   lastDevice[0] = '\0';
   lastClock[0]  = '\0';
   lastBars      = 255;
@@ -440,7 +447,7 @@ void Ui::setPageDots(uint8_t count, uint8_t active) {
   if (count == pageCount && active == pageActive) return;
   pageCount  = count;
   pageActive = active;
-  lastClock[0] = '\0';           // vynutit prekresleni stavoveho radku
+  lastClock[0] = '\0';           // force a status bar repaint
 }
 
 void Ui::updateStatus() {
@@ -473,7 +480,7 @@ void Ui::updateStatus() {
   if (line[0])
     textLine(32, STATUS_Y + 2, 118, 18, line, nullptr, 2, cAccent);
 
-  // Tecky stranek uprostred
+  // Page dots in the middle
   if (pageCount > 1) {
     int16_t step = 11;
     int16_t x0 = SCREEN_W / 2 - (pageCount - 1) * step / 2;
@@ -590,7 +597,8 @@ void Ui::fullArt(const PlayerState& st) {
                    ART_SIZE);
   }
 
-  // Ztmaveny pruh dole, aby byl nazev citelny i na svetlem obalu.
+  // A darkened strip at the bottom, so the title stays readable even on
+  // a light cover.
   glassPanel(0, SCREEN_H - 46, SCREEN_W, 46, 0, 92);
 
   tft.setTextDatum(MC_DATUM);
@@ -610,7 +618,7 @@ void Ui::fullArt(const PlayerState& st) {
 }
 
 // ---------------------------------------------------------------------
-//  Dotyk
+//  Touch
 // ---------------------------------------------------------------------
 Hit Ui::hitTest(int16_t x, int16_t y) {
   if (x < 0 || y < 0) return Hit::None;
@@ -674,19 +682,19 @@ int Ui::valueFromX(Hit h, int16_t x) {
 }
 
 // ---------------------------------------------------------------------
-//  Podsviceni
+//  Backlight
 // ---------------------------------------------------------------------
 void Ui::dipBegin() {
 #if !FEAT_REPAINT_DIP
-  return;                       // ztmavovani pri prekresleni je vypnute
+  return;                       // the repaint dip is switched off
 #endif
   if (!blReady || blDipped) return;
 
-  // Stahnout na polovinu AKTUALNIHO jasu, ne na polovinu maxima. Kdyz uz
-  // je displej ztlumeny (necinnost, tma v mistnosti), stahnuti na
-  // polovinu maxima by ho naopak rozsvitilo.
+  // Pull down to half of the CURRENT brightness, not half of the maximum.
+  // When the display is already dimmed (idle, a dark room), dropping to
+  // half of the maximum would brighten it instead.
   uint16_t target = max<uint16_t>(blDuty / 2, BL_MIN);
-  if (target >= blDuty) return;         // neni co ztlumovat
+  if (target >= blDuty) return;         // nothing to dim
 
   blDipFrom = blDuty;
   blDipped  = true;
@@ -724,15 +732,17 @@ void Ui::tickBacklight(uint32_t lastActivity) {
   if (millis() - lastActivity > BL_DIM_AFTER_MS) want = BL_DIM_LEVEL;
 
   #if FEAT_LDR_BRIGHTNESS
-  // LDR: cim vic svetla, tim vetsi napeti -> mensi hodnota z deliče.
-  // Ve tme stahneme jas, at to v noci nesviti do oci.
+  // LDR: the more light, the higher the voltage -> a smaller value out of
+  // the divider. In the dark we pull the brightness down, so it does not
+  // shine into your eyes at night.
   static uint32_t lastLdr = 0;
   static uint16_t ldrScale = 255;
   if (millis() - lastLdr > 1500) {
     lastLdr = millis();
-    // Na CYD je fotorezistor mezi 3V3 a GPIO34 s odporem k zemi,
-    // takze vic svetla = vetsi napeti = vetsi hodnota z ADC.
-    int raw = analogRead(PIN_LDR);          // 0..4095, vetsi = svetleji
+    // On the CYD the photoresistor sits between 3V3 and GPIO34 with a
+    // resistor to ground, so more light = more voltage = a higher ADC
+    // reading.
+    int raw = analogRead(PIN_LDR);          // 0..4095, higher = brighter
     #if LDR_INVERTED
       raw = 4095 - raw;
     #endif
@@ -756,7 +766,7 @@ void Ui::toast(const char* text) {
   strncpy(toastText, text ? text : "", sizeof(toastText) - 1);
   toastText[sizeof(toastText) - 1] = '\0';
   toastUntil = millis() + 2200;
-  lastDevice[0] = '\0';        // vynutit prekresleni stavoveho radku
+  lastDevice[0] = '\0';        // force a status bar repaint
 }
 
 void Ui::clearToast() {
@@ -772,16 +782,18 @@ void Ui::setLed(uint32_t rgb888) {
 #if FEAT_RGB_LED
   if (!ledOk) return;
 
-  // LED je ACTIVE LOW, takze zhasnuto = strida 255. Bez teto vetve by
-  // se cerna prohnala pres fromHsv() a skoncila jako tlumene cervena.
+  // The LED is ACTIVE LOW, so off = a duty cycle of 255. Without this
+  // branch black would be pushed through fromHsv() and end up as a dim
+  // red.
   if (rgb888 == 0) {
     ledcWrite(PIN_LED_R, 255);
     ledcWrite(PIN_LED_G, 255);
     ledcWrite(PIN_LED_B, 255);
     return;
   }
-  // Plne rozsvicena LED je pri pohledu ze predu oslnujici - stahneme ji
-  // na petinu a jeste ji normalizujeme, aby byla poznat barva a ne jas.
+  // A fully lit LED is blinding head-on - we pull it down to a fifth and
+  // normalise it as well, so what you see is the color and not the
+  // brightness.
   Col::Hsv h = Col::toHsv(rgb888);
   uint32_t c = Col::fromHsv(h.h, (uint8_t)max<int>(h.s, 120), 60);
   ledcWrite(PIN_LED_R, 255 - Col::R(c));    // ACTIVE LOW
@@ -793,7 +805,7 @@ void Ui::setLed(uint32_t rgb888) {
 }
 
 // ---------------------------------------------------------------------
-//  Nastaveni  -  jednoducha modalni obrazovka
+//  Settings  -  a simple modal screen
 // ---------------------------------------------------------------------
 namespace {
 
@@ -809,7 +821,7 @@ const MenuItem MENU[] = {
 };
 constexpr int MENU_N = sizeof(MENU) / sizeof(MENU[0]);
 
-// Sest polozek se musi vejit pod nadpis do 240 px.
+// Six items have to fit below the heading within 240 px.
 constexpr int16_t ROW_H  = 34;
 constexpr int16_t ROW_Y0 = 28;
 

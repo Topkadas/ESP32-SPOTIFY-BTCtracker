@@ -23,21 +23,21 @@ void say(const char* title, const char* detail) {
   LOGF("[net] %s | %s\n", title, detail ? detail : "");
 }
 
-// Vypise, co deska ve vzduchu opravdu slysi. Kdyz v seznamu neni ta
-// sit, na kterou se ma pripojit, nema smysl resit heslo - bud je to
-// 5GHz pasmo, skryte SSID, nebo je router moc daleko.
+// Prints what the board actually hears on the air. If the network it is
+// meant to join is not in the list, the password is not the problem -
+// it is either a 5GHz band, a hidden SSID, or a router too far away.
 void scanAndLog() {
 #if DECK_VERBOSE
-  LOGLN("[net] skenuji site v dosahu...");
-  int n = WiFi.scanNetworks(false, true);    // sync, vcetne skrytych
+  LOGLN("[net] scanning for networks in range...");
+  int n = WiFi.scanNetworks(false, true);    // synchronous, hidden networks included
   if (n <= 0) {
-    LOGLN("[net] nenalezena zadna sit (ESP32 umi jen 2,4 GHz)");
+    LOGLN("[net] no network found (the ESP32 only does 2.4 GHz)");
   } else {
     for (int i = 0; i < n; i++) {
-      LOGF("[net]   %2d. %-28s  %4d dBm  kanal %2d  %s\n", i + 1,
-           WiFi.SSID(i).length() ? WiFi.SSID(i).c_str() : "(skryte)",
+      LOGF("[net]   %2d. %-28s  %4d dBm  channel %2d  %s\n", i + 1,
+           WiFi.SSID(i).length() ? WiFi.SSID(i).c_str() : "(hidden)",
            WiFi.RSSI(i), WiFi.channel(i),
-           WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "otevrena" : "heslo");
+           WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "open" : "password");
     }
   }
   WiFi.scanDelete();
@@ -50,12 +50,13 @@ void startTime() {
   g_timeStarted = true;
 }
 
-// Parametr musi prezit cele trvani portalu, proto je staticky.
+// The parameter has to outlive the portal, which is why it is static.
 WiFiManagerParameter* g_cityParam = nullptr;
 
 void configurePortal(WiFiManager& wm) {
-  // Pri ladeni chceme videt, co WiFiManager dela - jinak je po
-  // "Pripojuji WiFi" na Serialu ticho a neni poznat, kde to vazne.
+  // While debugging we want to see what WiFiManager is doing - otherwise
+  // Serial goes quiet after "Connecting to WiFi" and there is no telling
+  // where it got stuck.
   wm.setDebugOutput(DECK_VERBOSE ? true : false);
   wm.setDarkMode(true);
   wm.setTitle("SpotifyDeck");
@@ -72,7 +73,7 @@ void configurePortal(WiFiManager& wm) {
     if (!g_cityParam) return;
     strncpy(g_cityResult, g_cityParam->getValue(), sizeof(g_cityResult) - 1);
     g_cityResult[sizeof(g_cityResult) - 1] = '\0';
-    LOGF("[net] portal nastavil misto: %s\n", g_cityResult);
+    LOGF("[net] portal set the place to: %s\n", g_cityResult);
   });
 
   wm.setAPCallback([](WiFiManager* mgr) {
@@ -89,7 +90,7 @@ void Net::begin(StatusFn status) {
   g_status = status;
 
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);            // bez tohohle jsou HTTP dotazy trhane
+  WiFi.setSleep(false);            // without this the HTTP requests stutter
   WiFi.setAutoReconnect(true);
 
   say(T(S_WIFI_CONNECTING),
@@ -101,20 +102,21 @@ void Net::begin(StatusFn status) {
   configurePortal(wm);
 
 #if WIFI_FORGET
-  // Jednorazove zahozeni ulozenych udaju - kdyz se deska porad marne
-  // pokousi o sit se spatnym heslem, je rychlejsi zacit od nuly.
-  LOGLN("[net] WIFI_FORGET: mazu ulozene pristupove udaje");
+  // A one-shot wipe of the stored credentials - when the board keeps
+  // hammering a network with the wrong password, starting from scratch
+  // is quicker.
+  LOGLN("[net] WIFI_FORGET: clearing the stored credentials");
   wm.resetSettings();
   delay(300);
 #endif
 
-  LOGF("[net] ulozena sit: '%s'\n", WiFi.SSID().c_str());
-  LOGF("[net] spoustim autoConnect, AP '%s' / heslo '%s'\n",
+  LOGF("[net] stored network: '%s'\n", WiFi.SSID().c_str());
+  LOGF("[net] starting autoConnect, AP '%s' / password '%s'\n",
        AP_NAME, AP_PASSWORD);
 
   bool ok = wm.autoConnect(AP_NAME, AP_PASSWORD);
 
-  LOGF("[net] autoConnect -> %s (status %d)\n", ok ? "OK" : "SELHALO",
+  LOGF("[net] autoConnect -> %s (status %d)\n", ok ? "OK" : "FAILED",
        (int)WiFi.status());
 
   if (!ok) {
@@ -123,7 +125,7 @@ void Net::begin(StatusFn status) {
     ESP.restart();
   }
 
-  LOGF("[net] pripojeno k %s, IP %s\n",
+  LOGF("[net] connected to %s, IP %s\n",
        WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
   startTime();
 }
@@ -162,7 +164,7 @@ void Net::forgetWifi() {
 
 bool Net::timeValid() {
   time_t now = time(nullptr);
-  return now > 1700000000;          // cokoliv po roce 2023 = cas uz sedi
+  return now > 1700000000;          // anything past 2023 means the time is real
 }
 
 bool Net::formatClock(char* out, size_t cap) {
@@ -179,7 +181,7 @@ void Net::tick() {
   g_lastCheck = now;
 
   if (connected()) {
-    if (g_downSince) LOGLN("[net] WiFi zpatky");
+    if (g_downSince) LOGLN("[net] WiFi is back");
     g_downSince = 0;
     g_backoffS  = 0;
     startTime();
@@ -189,20 +191,21 @@ void Net::tick() {
   if (g_downSince == 0) {
     g_downSince = now;
     g_retryAt   = now + 5000;
-    LOGLN("[net] spojeni spadlo, zkousim znovu");
+    LOGLN("[net] connection dropped, retrying");
     WiFi.reconnect();
     return;
   }
 
-  // Drive se tady po dvou minutach restartovala cela deska. To je ale
-  // zbytecne tvrde - restart WiFi sam o sobe nic nespravi a uzivatel
-  // prijde o rozdelanou obrazovku i o cas z NTP. Misto toho se jen
-  // opakuje pokus o pripojeni, s rostouci prodlevou.
+  // This used to reboot the whole board after two minutes. That is
+  // needlessly harsh - restarting WiFi fixes nothing on its own and the
+  // user loses the screen they were looking at along with the NTP time.
+  // Instead the connection attempt is simply repeated, with a growing
+  // delay.
   if ((int32_t)(now - g_retryAt) >= 0) {
     uint32_t down = (now - g_downSince) / 1000;
     g_backoffS = min<uint32_t>(g_backoffS ? g_backoffS * 2 : 5, 120);
     g_retryAt  = now + g_backoffS * 1000UL;
-    LOGF("[net] bez WiFi uz %lu s, dalsi pokus za %lu s\n",
+    LOGF("[net] no WiFi for %lu s, next attempt in %lu s\n",
          (unsigned long)down, (unsigned long)g_backoffS);
     WiFi.disconnect();
     WiFi.reconnect();

@@ -9,10 +9,10 @@ namespace {
 bool        g_english = (DEFAULT_LANG_EN != 0);
 Preferences prefs;
 
-// Sloupec 0 = cesky, sloupec 1 = anglicky.
-// Poradi MUSI presne odpovidat enumu StrId v DeckLang.h.
+// Column 0 = Czech, column 1 = English.
+// The order MUST match the StrId enum in DeckLang.h exactly.
 const char* const TABLE[STR_COUNT][2] = {
-    // --- start a stav site ---
+    // --- boot and network state ---
     {"startuji...",              "starting up..."},
     {"Pripojuji WiFi",           "Connecting to WiFi"},
     {"hledam sit",               "looking for a network"},
@@ -44,14 +44,14 @@ const char* const TABLE[STR_COUNT][2] = {
     {"nelze menit",              "not adjustable"},
     {"Chyba",                    "Error"},
 
-    // --- nove prihlaseni ---
+    // --- re-authentication ---
     {"Spotify se odhlasilo",     "Spotify signed out"},
     {"Refresh token uz neplati.", "The refresh token has expired."},
     {"Spust znovu tools/get_token.py", "Run tools/get_token.py again"},
     {"a nahraj sketch s novym tokenem.",
      "and upload the sketch with the new token."},
 
-    // --- pocasi ---
+    // --- weather ---
     {"nacitam pocasi...",        "loading weather..."},
     {"pocitove %d C   vlhkost %d%%", "feels %d C   humidity %d%%"},
     {"vitr %d km/h",             "wind %d km/h"},
@@ -59,7 +59,7 @@ const char* const TABLE[STR_COUNT][2] = {
     {"misto '%s' nenalezeno",    "place '%s' not found"},
     {"pocasi: HTTP %d",          "weather: HTTP %d"},
 
-    // --- kurzy ---
+    // --- exchange rates ---
     {"nacitam kurz...",          "loading price..."},
     {"graf neni k dispozici",    "chart unavailable"},
     {"24h max",                  "24h high"},
@@ -67,16 +67,16 @@ const char* const TABLE[STR_COUNT][2] = {
     {"kurz CNB se nepodarilo nacist", "could not load the CNB rate"},
     {"Binance: HTTP %d",         "Binance: HTTP %d"},
 
-    // --- hodiny ---
+    // --- clock ---
     {"cekam na cas z internetu", "waiting for time from the internet"},
 
-    // --- kalibrace ---
+    // --- calibration ---
     {"Klepni presne do stredu terce", "Tap the centre of the target"},
     {"Kalibrace ulozena",        "Calibration saved"},
     {"Kalibrace dotyku",         "Touch calibration"},
     {"za chvili klepni na terce", "tap the targets in a moment"},
 
-    // --- nastaveni ---
+    // --- settings ---
     {"Nastaveni",                "Settings"},
     {"klepni mimo = zpet",       "tap outside = back"},
     {"Kalibrace dotyku",         "Touch calibration"},
@@ -94,10 +94,11 @@ const char* const TABLE[STR_COUNT][2] = {
     {"mazu ulozene obaly...",    "clearing cached artwork..."},
 };
 
-// Kdyz se pridá retezec do enumu a zapomene se na radek v tabulce
-// (nebo naopak), chceme to vedet uz pri prekladu, ne az na displeji.
+// If a string is added to the enum and the matching table row is
+// forgotten (or the other way round), we want to know at compile time,
+// not on the display.
 static_assert(sizeof(TABLE) / sizeof(TABLE[0]) == STR_COUNT,
-              "DeckLang: tabulka a enum StrId nesedi");
+              "DeckLang: the table and the StrId enum do not match");
 
 const char* const DAYS_CS[7] = {"Ne", "Po", "Ut", "St", "Ct", "Pa", "So"};
 const char* const DAYS_EN[7] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
@@ -114,7 +115,7 @@ void Lang::begin() {
   prefs.begin("deck", true);
   g_english = prefs.getBool("lang_en", DEFAULT_LANG_EN != 0);
   prefs.end();
-  LOGF("[lang] %s\n", g_english ? "English" : "cestina");
+  LOGF("[lang] %s\n", g_english ? "English" : "Czech");
 }
 
 bool Lang::isEnglish() { return g_english; }
@@ -144,8 +145,8 @@ const char* Lang::monthShort(int month) {
   return g_english ? MONTHS_EN[month] : MONTHS_CS[month];
 }
 
-// Kody WMO. Drzi se to pohromade v jedne funkci, protoze prirazovat
-// padesati kodum vlastni StrId by tabulku jen znepřehlednilo.
+// WMO codes. Kept together in one function, because handing fifty codes
+// their own StrId would only make the table harder to read.
 const char* Lang::weather(int code) {
   const bool en = g_english;
   switch (code) {

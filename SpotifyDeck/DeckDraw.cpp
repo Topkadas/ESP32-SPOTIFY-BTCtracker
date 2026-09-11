@@ -20,10 +20,11 @@ uint16_t cBad     = 0xE986;
 
 namespace {
 
-// Sprite musi byt siroky jako cely displej. Draw::text() si sirku orezava
-// na tuhle hodnotu, takze kazde uzsi reseni tise poskodi vsechny volajici,
-// kteri kresli sirsi radek - text se vycentruje vedle a konec predchoziho
-// retezce se nikdy nesmaze. 320 x 36 x 2 B = 23 kB haldy.
+// The sprite has to be as wide as the whole display. Draw::text() clamps
+// the width to this value, so anything narrower silently breaks every
+// caller that draws a wider line - the text ends up centred off to the
+// side and the tail of the previous string is never erased.
+// 320 x 36 x 2 B = 23 kB of heap.
 constexpr int16_t SPR_W = SCREEN_W;
 constexpr int16_t SPR_H = 36;
 
@@ -37,7 +38,7 @@ bool Draw::begin() {
   if (sprOk) return true;
   spr.setColorDepth(16);
   sprOk = (spr.createSprite(SPR_W, SPR_H) != nullptr);
-  if (!sprOk) LOGLN("[draw] POZOR: sprite se nevytvoril, text bude blikat");
+  if (!sprOk) LOGLN("[draw] WARNING: sprite not created, text will flicker");
   return sprOk;
 }
 
@@ -53,7 +54,7 @@ void Draw::refreshPalette() {
   cGood   = Col::to565(Col::rgb(0x3F, 0xD6, 0x7A));
   cBad    = Col::to565(Col::rgb(0xFF, 0x6B, 0x6B));
 
-  // Barva sklenene listy - vezme se pozadi pod ni a ztmavi se.
+  // Color of the glass bar - take the background under it and darken it.
   uint32_t under = Col::to888(Art::pixelAt(SCREEN_W / 2, CTRL_CY));
   cPanel   = Col::to565(Col::scale(under, 108));
   cPanelHi = blend(cPanel, cText, 34);
@@ -61,8 +62,8 @@ void Draw::refreshPalette() {
 
 namespace {
 
-// Naplni oblast spritu pozadim z DeckArt. Sprite si barvy drzi
-// s prohozenymi bajty, proto ten bswap.
+// Fills a region of the sprite with the background from DeckArt. The
+// sprite stores its colors byte-swapped, hence the bswap.
 void spriteBackground(int16_t x, int16_t y, int16_t w, int16_t h,
                       uint16_t solid, bool useSolid) {
   uint16_t* buf = (uint16_t*)spr.getPointer();
@@ -101,9 +102,10 @@ void Draw::text(int16_t x, int16_t y, int16_t w, int16_t h, const char* s,
   spr.setTextColor(color);
   spr.setTextDatum(datum);
 
-  // Text se vzdy sazi svisle na stred boxu (drawString dostava y = h/2),
-  // takze horni a dolni datum nedava smysl - glyfy by se kreslily pod
-  // spodni hranu spritu a orizly by se. Prevedeme je na stredove.
+  // Text is always set vertically centred in the box (drawString gets
+  // y = h/2), so top and bottom datums make no sense - the glyphs would
+  // be drawn below the bottom edge of the sprite and get clipped. Map
+  // them onto the middle ones.
   if      (datum == TL_DATUM || datum == BL_DATUM) datum = ML_DATUM;
   else if (datum == TC_DATUM || datum == BC_DATUM) datum = MC_DATUM;
   else if (datum == TR_DATUM || datum == BR_DATUM) datum = MR_DATUM;
@@ -143,7 +145,7 @@ void Draw::glass(int16_t x, int16_t y, int16_t w, int16_t h, int16_t r,
 
       uint32_t c = Col::scale(Col::to888(rowTmp[dx]), darken);
       if (dy == 0 || (dy == 1 && dx > r && dx < w - r))
-        c = Col::mix(c, Col::rgb(255, 255, 255), 26);   // jemny horni odlesk
+        c = Col::mix(c, Col::rgb(255, 255, 255), 26);   // soft highlight along the top
       rowTmp[dx] = Col::to565(c);
     }
     tft.pushImage(x, y + dy, w, 1, rowTmp);

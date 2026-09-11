@@ -20,8 +20,8 @@ namespace {
 struct Day {
   WxIcon  icon = WxIcon::Unknown;
   float   tmin = 0, tmax = 0;
-  int     pop  = 0;          // pravdepodobnost srazek v %
-  char    label[4] = {0};    // "Po", "Ut", ...
+  int     pop  = 0;          // precipitation probability in %
+  char    label[4] = {0};    // "Mo", "Tu", ...
 };
 
 char   g_place[40]  = "Jirny";
@@ -47,7 +47,7 @@ constexpr const char* GEO_API =
     "https://geocoding-api.open-meteo.com/v1/search";
 constexpr const char* WX_API = "https://api.open-meteo.com/v1/forecast";
 
-// --- WMO kody --------------------------------------------------------
+// --- WMO codes -------------------------------------------------------
 WxIcon iconFor(int code) {
   switch (code) {
     case 0:  return WxIcon::Clear;
@@ -68,9 +68,11 @@ WxIcon iconFor(int code) {
   }
 }
 
-// Slovni popis pocasi je v obou jazycich v DeckLang - viz Lang::weather().
+// The wording for each code lives in both languages in DeckLang -
+// see Lang::weather().
 
-// Z data "2026-09-12" udela zkratku dne v tydnu (Zellerova kongruence).
+// Turns a date like "2026-09-12" into a weekday abbreviation (Zeller's
+// congruence).
 void weekdayOf(const char* iso, char* out, size_t cap) {
   out[0] = '\0';
   if (!iso || strlen(iso) < 10) return;
@@ -80,7 +82,7 @@ void weekdayOf(const char* iso, char* out, size_t cap) {
   if (m < 3) { m += 12; y--; }
   int k = y % 100, j = y / 100;
   int h = (d + (13 * (m + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
-  int dow = (h + 6) % 7;               // 0 = nedele
+  int dow = (h + 6) % 7;               // 0 = Sunday
   strncpy(out, Lang::dayShort(dow), cap - 1);
   out[cap - 1] = '\0';
 }
@@ -154,11 +156,11 @@ void Weather::begin() {
     strncpy(g_place, city.c_str(), sizeof(g_place) - 1);
     g_place[sizeof(g_place) - 1] = '\0';
   }
-  // Souradnice mame ulozene -> geokodovat znovu neni potreba.
+  // We have the coordinates stored -> no need to geocode again.
   g_located = (g_lat != 0.0f || g_lon != 0.0f);
   g_needGeocode = !g_located;
 
-  LOGF("[wx] misto: %s (%.4f, %.4f)\n", g_place, g_lat, g_lon);
+  LOGF("[wx] place: %s (%.4f, %.4f)\n", g_place, g_lat, g_lon);
 }
 
 void Weather::setPlace(const char* name) {
@@ -220,7 +222,7 @@ bool Weather::poll() {
 
   JsonVariantConst daily = doc["daily"];
   for (int i = 0; i < 3; i++) {
-    int idx = i + 1;                        // 0 je dnesek, ukazujeme dalsi
+    int idx = i + 1;                        // 0 is today, we show the days after
     g_days[i].icon = iconFor(daily["weather_code"][idx] | -1);
     g_days[i].tmax = daily["temperature_2m_max"][idx] | 0.0f;
     g_days[i].tmin = daily["temperature_2m_min"][idx] | 0.0f;
@@ -232,19 +234,19 @@ bool Weather::poll() {
 
   g_valid     = true;
   g_fetchedAt = millis();
-  g_nextDelay = 10UL * 60UL * 1000UL;       // predpoved se meni pomalu
-  LOGF("[wx] %.1f C, kod %d, %s\n", g_temp, g_code, Lang::weather(g_code));
+  g_nextDelay = 10UL * 60UL * 1000UL;       // the forecast changes slowly
+  LOGF("[wx] %.1f C, code %d, %s\n", g_temp, g_code, Lang::weather(g_code));
   return true;
 }
 
 uint32_t Weather::nextPollDelay() { return g_nextDelay; }
 
 // ---------------------------------------------------------------------
-//  Vykresleni
+//  Drawing
 // ---------------------------------------------------------------------
 namespace {
 
-// Pozadi stranky se ladi podle pocasi a denni doby.
+// The page background is tuned to the weather and the time of day.
 void applyPalette() {
   uint32_t top, bottom, accent;
 
@@ -297,9 +299,10 @@ void drawForecast() {
     Draw::glass(x, y, w, h, 12, 118);
 
     uint16_t bg = Draw::cPanel;
-    // Den nahore pres celou sirku, pod nim ikona vlevo a cisla vpravo.
-    // Ikona musi zustat mala (12 px) - pri vetsi uz se "21 / 12" v pisme 2
-    // do zbytku karty nevejde a konec se orizne.
+    // The day across the top, below it the icon on the left and the
+    // numbers on the right. The icon has to stay small (12 px) - any
+    // bigger and "21 / 12" in font 2 no longer fits what is left of the
+    // card and the end gets clipped.
     Draw::text(x + 4, y + 3, w - 8, 15, g_days[i].label, nullptr, 2,
                Draw::cText2, 0, MC_DATUM);
 
@@ -344,8 +347,9 @@ void Weather::draw(bool full) {
   Icons::weather(56, 74, 30, iconFor(g_code), g_isDay, Draw::cText,
                  Draw::cAccent, bg);
 
-  // Teplota se sklada ze tri kusu: cislo, krouzek stupnu a "C". Krouzek
-  // musi jit az za skutecnou sirku cisla, jinak by u "-12" lezel na minusu.
+  // The temperature is built from three pieces: the number, the degree
+  // ring and "C". The ring has to go past the measured width of the
+  // number, otherwise on "-12" it would sit on top of the minus sign.
   char t[8];
   fmtTemp(g_temp, t, sizeof(t));
   Draw::bigText(108, 42, t, &FreeSansBold24pt7b, Draw::cText, TL_DATUM);
@@ -375,7 +379,7 @@ void Weather::draw(bool full) {
 void Weather::tick() {}
 
 bool Weather::handleTouch(const TouchEvent& ev) {
-  // Klepnuti kdekoliv = vynutit obnovu.
+  // A tap anywhere = force a refresh.
   if (ev.released && ev.tap) {
     g_nextDelay = 0;
     return true;

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------
-//  DeckNet.h  -  WiFi, konfiguracni portal a cas
+//  DeckNet.h  -  WiFi, the config portal and time
 // ---------------------------------------------------------------------
 #pragma once
 
@@ -7,36 +7,36 @@
 
 namespace Net {
 
-// Callback, kterym si modul rika o vypsani stavu na displej.
-// Diky nemu nemusi DeckNet vedet nic o DeckUi.
+// The callback this module uses to ask for a status line on the display.
+// Thanks to it DeckNet needs to know nothing about DeckUi.
 typedef void (*StatusFn)(const char* title, const char* detail);
 
-// Pripoji se k ulozene siti. Kdyz zadna neni (nebo se to nepovede),
-// otevre konfiguracni portal na AP "SpotifyDeck".
+// Connects to the stored network. If there is none (or it fails), it
+// opens the config portal on the "SpotifyDeck" AP.
 void begin(StatusFn status);
 
 bool connected();
 
-// Sila signalu prevedena na 0-4 "cárky".
+// Signal strength mapped to 0-4 "bars".
 uint8_t bars();
 
-// Rucni otevreni portalu (dlouhy stisk v nastaveni).
+// Opening the portal by hand (long press in settings).
 void startPortal(StatusFn status);
 
-// Portal umi krome WiFi nastavit i misto pro pocasi. Hodnota z formulare
-// se da vyzvednout az po jeho zavreni.
+// Besides WiFi the portal can also set the place for the weather. The
+// form value can only be picked up once the portal has closed.
 void        setCityDefault(const char* city);
-const char* cityFromPortal();   // prazdne = uzivatel nic nezmenil
+const char* cityFromPortal();   // empty = the user changed nothing
 void        clearCityFromPortal();
 
-// Zapomene ulozenou sit.
+// Forgets the stored network.
 void forgetWifi();
 
-// Cas z NTP. Vraci false, dokud se cas nesynchronizoval.
+// Time from NTP. Returns false until the time has synced.
 bool timeValid();
 bool formatClock(char* out, size_t cap);   // "14:32"
 
-// Vola se v loop() - hlida vypadky spojeni a zkousi se pripojit zpet.
+// Called from loop() - watches for dropouts and tries to reconnect.
 void tick();
 
 }  // namespace Net

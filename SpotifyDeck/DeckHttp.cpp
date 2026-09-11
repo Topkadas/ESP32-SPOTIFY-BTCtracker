@@ -22,7 +22,7 @@ void setError(const char* fmt, ...) {
   LOGF("[http] %s\n", errorMsg);
 }
 
-// Vytahne hostitele z URL (vse mezi "//" a prvnim "/").
+// Pulls the host out of a URL (everything between "//" and the first "/").
 String hostOf(const String& url) {
   int a = url.indexOf("//");
   if (a < 0) return String();
@@ -33,9 +33,38 @@ String hostOf(const String& url) {
 
 bool isHttps(const String& url) { return url.startsWith("https://"); }
 
+// Throws away the open TLS session, so the next request starts from a
+// fresh handshake. Cheap insurance whenever a connection is suspect.
+void dropTls() {
+  if (tlsReady) {
+    tls.stop();
+    tlsHost = "";
+  }
+}
+
+// Every request MUST end here, never with a bare http.end().
+//
+// The keep-alive connection is shared by every module, so whatever one
+// request leaves unread in the socket becomes the next request's
+// response. That really happens: an error reply (403, 429) carries a
+// JSON body, and code that only looked at the status code used to walk
+// away without reading it. The next poll then parsed those leftovers,
+// saw "HTTP 200" with an empty body, and the display quietly stopped
+// updating while playback control - which ignores the reply - kept
+// working. So: drain first, end second.
+void finish(HTTPClient& http, bool poisoned = false) {
+  auto* s = http.getStreamPtr();   // NetworkClient* on core 3.x
+  if (s) {
+    uint32_t guard = millis() + 300;
+    while (s->available() && (int32_t)(millis() - guard) < 0) s->read();
+  }
+  http.end();
+  if (poisoned) dropTls();
+}
+
 bool prepare(HTTPClient& http, const String& url) {
   if (WiFi.status() != WL_CONNECTED) {
-    setError("bez WiFi");
+    setError("no WiFi");
     return false;
   }
 
@@ -46,14 +75,14 @@ bool prepare(HTTPClient& http, const String& url) {
 
   if (isHttps(url)) {
     if (!tlsReady) {
-      // Bez overovani certifikatu - viz README, kapitola Bezpecnost.
-      // Root CA by zabral dalsi kB flash a musel by se udrzovat.
+      // No certificate validation - see the Security section of the
+      // README. A root CA would cost more flash and need maintaining.
       tls.setInsecure();
       tls.setHandshakeTimeout(TLS_HANDSHAKE_S);
       tlsReady = true;
     }
     String h = hostOf(url);
-    if (tlsHost != h) {      // jiny host -> spojeni znovu pouzit nelze
+    if (tlsHost != h) {      // different host - the connection cannot be reused
       tls.stop();
       tlsHost = h;
     }
@@ -96,22 +125,28 @@ Http::Result Http::getJson(const String& url, JsonDocument& doc,
   if (r.code == 429) r.retryAfter = headerRetryAfter(http);
 
   if (r.code != 200) {
-    if (r.code < 0) setError("sit: %s", http.errorToString(r.code).c_str());
-    http.end();
+    if (r.code < 0) setError("network: %s", http.errorToString(r.code).c_str());
+    // An error reply still has a body; a transport error means the
+    // socket state is unknown. Both make the connection unsafe to reuse.
+    finish(http, r.code < 0);
     return r;
   }
 
   String payload = http.getString();
-  http.end();
 
   if (payload.isEmpty()) {
-    // Prazdne telo u kodu 200 neni "nic k zobrazeni" - je to selhane
-    // cteni (nejcasteji dosla halda pri reserve() v getString).
-    // Rozlisit to je dulezite: jinak by se to tvarilo jako "nic nehraje".
-    setError("prazdna odpoved u HTTP 200");
+    // An empty body on a 200 is not "nothing to show". Either the read
+    // failed (usually the heap ran out inside getString's reserve), or
+    // we just parsed leftovers from a previous reply. Treating it as
+    // valid is what made the screen freeze while the buttons still
+    // worked, so: report it, and throw the connection away.
+    finish(http, true);
+    setError("empty body on HTTP 200");
     r.code = -102;
     return r;
   }
+
+  finish(http);
 
   DeserializationError err =
       filter ? deserializeJson(doc, payload, DeserializationOption::Filter(*filter))
@@ -133,25 +168,34 @@ Http::Result Http::getText(const String& url, String& out, size_t maxLen) {
   r.code = http.GET();
   if (r.code == 429) r.retryAfter = headerRetryAfter(http);
 
+  bool poisoned = (r.code < 0);
+
   if (r.code == 200) {
     int size = http.getSize();
     if (size > (int)maxLen) {
-      setError("odpoved je moc velka (%d B)", size);
+      setError("response too large (%d B)", size);
       r.code = -101;
+      poisoned = true;             // we are not going to read it all
     } else {
       out = http.getString();
-      // Pri chunked prenosu server delku nehlasi (size == -1), takze
-      // strop musi platit i zpetne - jinak by sel obejit.
+      // With chunked transfer the server does not announce a length
+      // (size == -1), so the cap has to hold afterwards as well -
+      // otherwise it could simply be bypassed.
       if (out.length() > maxLen) {
-        setError("odpoved je moc velka (%u B)", (unsigned)out.length());
+        setError("response too large (%u B)", (unsigned)out.length());
         out = "";
         r.code = -101;
+      } else if (out.isEmpty()) {
+        setError("empty body on HTTP 200");
+        r.code = -102;
+        poisoned = true;
       }
     }
   } else if (r.code < 0) {
-    setError("sit: %s", http.errorToString(r.code).c_str());
+    setError("network: %s", http.errorToString(r.code).c_str());
   }
-  http.end();
+
+  finish(http, poisoned);
   return r;
 }
 
@@ -163,15 +207,17 @@ Http::Result Http::command(const char* verb, const String& url,
 
   collectRetryAfter(http);
   if (authHeader) http.addHeader("Authorization", authHeader);
-  // HTTPClient neposle Content-Length, kdyz je telo prazdne, a Spotify
-  // (za proxy envoy) na takovy PUT obcas neodpovi vubec.
+  // HTTPClient sends no Content-Length when the body is empty, and
+  // Spotify (behind its envoy proxy) sometimes never answers such a PUT.
   http.addHeader("Content-Length", "0");
 
   r.code = http.sendRequest(verb);
   if (r.code == 429) r.retryAfter = headerRetryAfter(http);
-  if (r.code < 0) setError("sit: %s", http.errorToString(r.code).c_str());
+  if (r.code < 0) setError("network: %s", http.errorToString(r.code).c_str());
 
-  http.end();
+  // A 204 has no body, but 403 and 429 do - and leaving it unread is
+  // exactly what poisons the next request on the shared connection.
+  finish(http, r.code < 0);
   return r;
 }
 
@@ -188,10 +234,10 @@ Http::Result Http::postForm(const String& url, const String& body,
 
   r.code = http.POST(body);
   if (r.code == 429) r.retryAfter = headerRetryAfter(http);
-  if (r.code < 0) setError("sit: %s", http.errorToString(r.code).c_str());
+  if (r.code < 0) setError("network: %s", http.errorToString(r.code).c_str());
 
-  String payload = (http.getSize() != 0) ? http.getString() : String();
-  http.end();
+  String payload = (r.code > 0) ? http.getString() : String();
+  finish(http, r.code < 0);
 
   if (payload.length()) {
     DeserializationError err =
@@ -202,16 +248,16 @@ Http::Result Http::postForm(const String& url, const String& body,
       setError("JSON: %s", err.c_str());
       r.code = -100;
     }
-    // Pri chybovem kodu necháme telo v doc - volajici si z nej precte
-    // "error" / "error_description".
+    // On an error code the body stays in doc on purpose - the caller
+    // reads "error" / "error_description" out of it.
   }
   return r;
 }
 
 namespace {
 
-// Stream, do ktereho HTTPClient::writeToStream sype telo odpovedi.
-// Diky nemu zvladneme i chunked prenos bez rucniho parsovani.
+// A Stream for HTTPClient::writeToStream to pour the response body into.
+// It handles chunked transfer for us, with no manual parsing.
 class MemSink : public Stream {
  public:
   MemSink(uint8_t* buf, size_t cap) : _buf(buf), _cap(cap) {}
@@ -249,34 +295,34 @@ size_t Http::download(const String& url, uint8_t** buf, size_t maxLen) {
 
   int code = http.GET();
   if (code != 200) {
-    http.end();
-    setError("stahovani: HTTP %d", code);
+    finish(http, code < 0);
+    setError("download: HTTP %d", code);
     return 0;
   }
 
   int declared = http.getSize();
   size_t cap = (declared > 0) ? (size_t)declared : maxLen;
   if (cap > maxLen) {
-    http.end();
-    setError("soubor je moc velky (%d B)", declared);
+    finish(http, true);
+    setError("file too large (%d B)", declared);
     return 0;
   }
   if (ESP.getMaxAllocHeap() < cap + 8192) {
-    http.end();
-    setError("malo pameti (%u B)", (unsigned)ESP.getMaxAllocHeap());
+    finish(http, true);
+    setError("not enough memory (%u B)", (unsigned)ESP.getMaxAllocHeap());
     return 0;
   }
 
   uint8_t* p = (uint8_t*)malloc(cap);
-  if (!p) { http.end(); setError("malloc selhal"); return 0; }
+  if (!p) { finish(http, true); setError("malloc failed"); return 0; }
 
   MemSink sink(p, cap);
   int written = http.writeToStream(&sink);
-  http.end();
+  finish(http);
 
   if (written <= 0 || sink.written() == 0 || sink.overflowed()) {
     free(p);
-    setError("stazeno jen %d B", written);
+    setError("only %d B downloaded", written);
     return 0;
   }
 
@@ -284,8 +330,6 @@ size_t Http::download(const String& url, uint8_t** buf, size_t maxLen) {
   return sink.written();
 }
 
-void Http::releaseTls() {
-  if (tlsReady) { tls.stop(); tlsHost = ""; }
-}
+void Http::releaseTls() { dropTls(); }
 
 const char* Http::lastError() { return errorMsg; }

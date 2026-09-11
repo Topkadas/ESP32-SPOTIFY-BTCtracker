@@ -13,15 +13,15 @@
 
 namespace {
 
-constexpr int16_t R      = 94;                 // polomer cifernika
+constexpr int16_t R      = 94;                 // dial radius
 constexpr int16_t SPR_D  = 2 * R + 2;          // 190 px
 constexpr int16_t CX     = SCREEN_W / 2;
 constexpr int16_t CY     = 130;
 constexpr int16_t SPR_X  = CX - R - 1;
 constexpr int16_t SPR_Y  = CY - R - 1;
 
-// Barva, ktera se pri poslani spritu bere jako pruhledna - diky ni
-// zustanou rohy ctvercoveho spritu prekryte pozadim stranky.
+// The color treated as transparent when the sprite is pushed - it is what
+// keeps the corners of the square sprite covered by the page background.
 constexpr uint16_t MAGIC = TFT_MAGENTA;
 
 TFT_eSprite face = TFT_eSprite(&tft);
@@ -52,7 +52,7 @@ void applyPalette() {
   cText   = Col::to565(Col::rgb(0xB6, 0xC2, 0xD6));
 }
 
-// Uhel 0 = 12 hodin, roste po smeru hodinovych rucicek.
+// Angle 0 = 12 o'clock, growing clockwise.
 void handPoint(float deg, float len, float& x, float& y) {
   float rad = (deg - 90.0f) * (float)DEG_TO_RAD;
   x = R + 1 + cosf(rad) * len;
@@ -65,7 +65,7 @@ void drawFace(const struct tm& t) {
   face.drawSmoothCircle(R + 1, R + 1, R, cRing, cFace);
   face.drawSmoothCircle(R + 1, R + 1, R - 1, cRing, cFace);
 
-  // Minutove a hodinove risky
+  // Minute and hour ticks
   for (int i = 0; i < 60; i++) {
     bool big = (i % 5 == 0);
     float x1, y1, x2, y2;
@@ -75,7 +75,7 @@ void drawFace(const struct tm& t) {
                       big ? cText : cTick, cFace);
   }
 
-  // Cisla 12 / 3 / 6 / 9
+  // The numerals 12 / 3 / 6 / 9
   face.setTextDatum(MC_DATUM);
   face.setFreeFont(&FreeSansBold12pt7b);
   face.setTextColor(cText);
@@ -87,7 +87,7 @@ void drawFace(const struct tm& t) {
   }
   face.setFreeFont(nullptr);
 
-  // Datum pod stredem
+  // The date below the centre
   char date[24];
   snprintf(date, sizeof(date), "%s %d. %s", Lang::dayShort(t.tm_wday),
            t.tm_mday, Lang::monthShort(t.tm_mon));
@@ -104,23 +104,23 @@ void drawHands(const struct tm& t) {
 
   float x, y, bx, by;
 
-  // hodinova
+  // hour hand
   handPoint(hourDeg, R * 0.52f, x, y);
   handPoint(hourDeg + 180.0f, 14.0f, bx, by);
   face.drawWideLine(bx, by, x, y, 6.5f, cHand, cFace);
 
-  // minutova
+  // minute hand
   handPoint(minDeg, R * 0.76f, x, y);
   handPoint(minDeg + 180.0f, 18.0f, bx, by);
   face.drawWideLine(bx, by, x, y, 4.5f, cHand, cFace);
 
-  // vterinova
+  // second hand
   handPoint(secDeg, R * 0.84f, x, y);
   handPoint(secDeg + 180.0f, 22.0f, bx, by);
   face.drawWideLine(bx, by, x, y, 2.0f, cSecond, cFace);
   face.fillSmoothCircle((int32_t)x, (int32_t)y, 3, cSecond, cFace);
 
-  // stredovy cep
+  // centre pin
   face.fillSmoothCircle(R + 1, R + 1, 6, cSecond, cFace);
   face.fillSmoothCircle(R + 1, R + 1, 2, cFace, cSecond);
 }
@@ -140,9 +140,9 @@ void drawDigital(const struct tm& t, bool full) {
   char sec[4];
   snprintf(sec, sizeof(sec), "%02d", t.tm_sec);
 
-  // Sirka se musi zmerit, ne odhadnout. Font 7 je sedmisegmentovy a jeho
-  // cislice jsou siroke - "14:32" i s vterinami se pri pevne zvolenych
-  // souradnicich lehce nevejde a konec se urizne.
+  // The width has to be measured, not guessed. Font 7 is seven-segment
+  // and its digits are wide - "14:32" plus the seconds easily overflows
+  // fixed coordinates and the tail gets cut off.
   int16_t wBig = tft.textWidth(now, 7);
   int16_t wSec = tft.textWidth(sec, 4);
   const int16_t GAP = 10;
@@ -153,8 +153,8 @@ void drawDigital(const struct tm& t, bool full) {
   int16_t left  = (SCREEN_W - total) / 2;
   if (left < MARGIN) left = MARGIN;
 
-  // Cely pas najednou - vterina se meni kazdou sekundu a bez spolecneho
-  // mazani by za sebou nechavala zbytky.
+  // The whole strip at once - the seconds change every second and without
+  // a shared erase they would leave crumbs behind.
   Art::paintRect(0, 72, SCREEN_W, 82);
 
   tft.setTextDatum(ML_DATUM);
@@ -189,7 +189,7 @@ void Clock::enter() {
   if (!digital && !ready) {
     face.setColorDepth(8);
     ready = (face.createSprite(SPR_D, SPR_D) != nullptr);
-    if (!ready) LOGLN("[clock] sprite se nevesel do pameti, jedu digitalne");
+    if (!ready) LOGLN("[clock] sprite did not fit in memory, falling back to digital");
   }
   lastSec = lastMin = lastDay = -1;
   lastDigital[0] = '\0';
@@ -230,9 +230,9 @@ void Clock::tick() {
 
   if (digital || !ready) { drawDigital(t, false); lastSec = t.tm_sec; return; }
 
-  // Cely cifernik i rucicky se skladaji ve spritu a na displej jdou
-  // jednim pruchodem - proto se muze prekreslovat vsechno kazdou vterinu,
-  // aniz by to blikalo.
+  // The whole dial and the hands are composed in the sprite and go to the
+  // display in a single pass - which is why everything can be repainted
+  // every second without flickering.
   drawFace(t);
   drawHands(t);
   lastMin = t.tm_min;

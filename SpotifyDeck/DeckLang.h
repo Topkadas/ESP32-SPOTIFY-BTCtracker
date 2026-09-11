@@ -1,24 +1,24 @@
 // ---------------------------------------------------------------------
-//  DeckLang.h  -  cestina / anglictina pro cele prostredi displeje
+//  DeckLang.h  -  Czech / English for the whole display UI
 //
-//  Vsechny texty, ktere uzivatel uvidi, jsou na jednom miste v tabulce
-//  o dvou sloupcich. Prepina se v Nastaveni -> Jazyk a volba se uklada
-//  do NVS, takze plati i po restartu.
+//  Every text the user gets to see lives in one place, in a two-column
+//  table. It is switched in Settings -> Language and the choice is kept
+//  in NVS, so it survives a restart.
 //
-//  Pozor: displej umi jen ASCII (viz DeckText.h), takze ani ceske,
-//  ani anglicke retezce nesmi obsahovat diakritiku.
+//  Note: the display can only do ASCII (see DeckText.h), so neither the
+//  Czech nor the English strings may contain accents.
 // ---------------------------------------------------------------------
 #pragma once
 
 #include <Arduino.h>
 
 enum StrId : uint16_t {
-  // --- start a stav site ---
+  // --- boot and network state ---
   S_BOOTING,
   S_WIFI_CONNECTING,
   S_WIFI_SEARCHING,
   S_WIFI_SETUP,
-  S_WIFI_CREDS,          // "WiFi: %s / heslo: %s"
+  S_WIFI_CREDS,          // "WiFi: %s / password: %s"
   S_WIFI_FAILED,
   S_RESTARTING,
   S_NO_WIFI,
@@ -26,7 +26,7 @@ enum StrId : uint16_t {
   S_SPOTIFY_SIGNIN,
   S_PORTAL_OPENING,
   S_PORTAL_JOIN,
-  S_CITY_PARAM,          // popisek pole ve WiFi portalu
+  S_CITY_PARAM,          // field label in the WiFi portal
 
   // --- Spotify ---
   S_NOTHING_PLAYING,
@@ -38,26 +38,26 @@ enum StrId : uint16_t {
   S_RATE_LIMITED,
   S_NEXT_TRACK,
   S_PREV_TRACK,
-  S_VOLUME_FMT,          // "hlasitost %d %%"
+  S_VOLUME_FMT,          // "volume %d %%"
   S_NO_VOLUME,
-  S_VOL_UNAVAILABLE,     // vedle ikony reproduktoru
+  S_VOL_UNAVAILABLE,     // next to the speaker icon
   S_ERROR,
 
-  // --- nove prihlaseni ---
+  // --- re-authentication ---
   S_REAUTH_TITLE,
   S_REAUTH_L1,
   S_REAUTH_L2,
   S_REAUTH_L3,
 
-  // --- pocasi ---
+  // --- weather ---
   S_WX_LOADING,
-  S_WX_FEELS_FMT,        // "pocitove %d C   vlhkost %d%%"
-  S_WX_WIND_FMT,         // "vitr %d km/h"
-  S_WX_GEOCODE_FMT,      // "geokodovani: HTTP %d"
-  S_WX_NOTFOUND_FMT,     // "misto '%s' nenalezeno"
-  S_WX_HTTP_FMT,         // "pocasi: HTTP %d"
+  S_WX_FEELS_FMT,        // "feels %d C   humidity %d%%"
+  S_WX_WIND_FMT,         // "wind %d km/h"
+  S_WX_GEOCODE_FMT,      // "geocoding: HTTP %d"
+  S_WX_NOTFOUND_FMT,     // "place '%s' not found"
+  S_WX_HTTP_FMT,         // "weather: HTTP %d"
 
-  // --- kurzy ---
+  // --- exchange rates ---
   S_BTC_LOADING,
   S_BTC_NOCHART,
   S_BTC_HIGH,
@@ -65,16 +65,16 @@ enum StrId : uint16_t {
   S_BTC_CNB_FAIL,
   S_BTC_HTTP_FMT,        // "Binance: HTTP %d"
 
-  // --- hodiny ---
+  // --- clock ---
   S_CLOCK_WAITING,
 
-  // --- kalibrace ---
+  // --- calibration ---
   S_CAL_PROMPT,
   S_CAL_SAVED,
   S_CAL_TITLE,
   S_CAL_SOON,
 
-  // --- nastaveni ---
+  // --- settings ---
   S_SETTINGS,
   S_BACK_HINT,
   S_MENU_CAL,       S_MENU_CAL_HINT,
@@ -95,17 +95,17 @@ bool isEnglish();
 void set(bool english);
 void toggle();
 
-// Preklad podle aktualne zvoleneho jazyka.
+// The translation in the currently selected language.
 const char* t(StrId id);
 
-// Zkratky dne v tydnu (0 = nedele) a mesice (0 = leden).
+// Short weekday (0 = Sunday) and month (0 = January) names.
 const char* dayShort(int dow);
 const char* monthShort(int month);
 
-// Slovni popis pocasi podle kodu WMO.
+// Weather description for a WMO code.
 const char* weather(int wmoCode);
 
 }  // namespace Lang
 
-// Zkratka, aby volani v kodu nebyla dlouha.
+// Shorthand, to keep the call sites short.
 #define T(id) Lang::t(id)

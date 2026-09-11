@@ -1,11 +1,11 @@
 // ---------------------------------------------------------------------
-//  DeckWeather.h  -  stranka s pocasim (Open-Meteo)
+//  DeckWeather.h  -  the weather page (Open-Meteo)
 //
-//  Open-Meteo je zdarma a NEPOTREBUJE API klic ani registraci, coz je
-//  pro zarizeni bez klavesnice presne to, co chceme. Misto se zadava
-//  jmenem ("Jirny", "Praha") a prelozi se na souradnice pres jejich
-//  geokodovaci API; vysledek se ulozi do NVS, takze se to dela jen
-//  pri zmene.
+//  Open-Meteo is free and needs NO API key and no sign-up, which on a
+//  device with no keyboard is exactly what we want. The place is entered
+//  by name ("Jirny", "Praha") and resolved to coordinates through their
+//  geocoding API; the result is stored in NVS, so it only happens when
+//  the place changes.
 // ---------------------------------------------------------------------
 #pragma once
 
@@ -17,17 +17,17 @@ namespace Weather {
 
 void begin();
 
-// Stahne aktualni pocasi + predpoved. Vraci true pri uspechu.
+// Fetches the current weather + forecast. Returns true on success.
 bool poll();
 
-// Za jak dlouho ma smysl se zeptat znovu (ms).
+// How long until it makes sense to ask again (ms).
 uint32_t nextPollDelay();
 
 void draw(bool full);
 void tick();
 bool handleTouch(const TouchEvent& ev);
 
-// Nastaveni mista. Jmeno se prelozi na souradnice pri nejblizsim poll().
+// Sets the place. The name is resolved to coordinates on the next poll().
 void        setPlace(const char* name);
 const char* place();
 

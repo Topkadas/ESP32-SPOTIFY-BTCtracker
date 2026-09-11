@@ -1,5 +1,5 @@
 @echo off
-REM Dvojklikem spusti ziskani Spotify refresh tokenu.
+REM Double-click to fetch a Spotify refresh token.
 setlocal
 cd /d "%~dp0.."
 
@@ -16,8 +16,8 @@ if %errorlevel%==0 (
 )
 
 echo.
-echo   Python nebyl nalezen. Nainstaluj ho z https://python.org
-echo   ^(pri instalaci zaskrtni "Add Python to PATH"^).
+echo   Python was not found. Install it from https://python.org
+echo   ^(tick "Add Python to PATH" during the install^).
 echo.
 
 :done

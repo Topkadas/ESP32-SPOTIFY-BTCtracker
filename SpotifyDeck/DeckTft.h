@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------
-//  DeckTft.h  -  jedina globalni instance displeje
+//  DeckTft.h  -  the one global display instance
 //
-//  TFT_eSPI drzi cely stav (rotaci, viewport, font) v objektu, takze
-//  dava smysl mit ho jeden a sdilet ho. Definice je v DeckUi.cpp.
+//  TFT_eSPI keeps its whole state (rotation, viewport, font) inside the
+//  object, so it makes sense to have one and share it. The definition
+//  lives in DeckUi.cpp.
 // ---------------------------------------------------------------------
 #pragma once
 

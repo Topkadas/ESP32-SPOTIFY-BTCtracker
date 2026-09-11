@@ -1,30 +1,31 @@
 /* =====================================================================
- *  SpotifyDeck  -  ctyri stranky na jedne male desce
+ *  SpotifyDeck  -  four pages on one small board
  *
- *  Deska:     ESP32-2432S028R ("Cheap Yellow Display"), 2.8" 320x240,
- *             rezistivni dotyk XPT2046
- *  Knihovny:  TFT_eSPI, TJpg_Decoder, XPT2046_Touchscreen, ArduinoJson,
- *             WiFiManager  (vse z Library Manageru)
+ *  Board:     ESP32-2432S028R ("Cheap Yellow Display"), 2.8" 320x240,
+ *             resistive XPT2046 touch
+ *  Libraries: TFT_eSPI, TJpg_Decoder, XPT2046_Touchscreen, ArduinoJson,
+ *             WiFiManager  (all from the Library Manager)
  *
- *  Stranky (prepinaji se tahem prstu doleva/doprava):
- *    1. Spotify  - obal alba rozmazany pres celou plochu, ostry ctverec
- *                  obalu, nazev / interpret / album, prubeh s previjenim,
- *                  play/pause, dalsi, predchozi, shuffle, repeat, hlasitost
- *    2. Pocasi   - Open-Meteo, bez API klice, misto se nastavi ve WiFi
- *                  portalu (vychozi Jirny)
- *    3. Bitcoin  - kurz z Binance + graf za 48 hodin, USD / EUR / CZK
- *    4. Hodiny   - analogovy cifernik, klepnutim prepne na digitalni
+ *  Pages (swipe left/right to switch):
+ *    1. Spotify  - the album art blurred across the whole screen, the
+ *                  sharp cover square, title / artist / album, a progress
+ *                  bar you can seek on, play/pause, next, previous,
+ *                  shuffle, repeat, volume
+ *    2. Weather  - Open-Meteo, no API key, the place is set in the WiFi
+ *                  portal (Jirny by default)
+ *    3. Bitcoin  - the price from Binance + a 48 hour chart, USD/EUR/CZK
+ *    4. Clock    - an analog dial, tap to switch to digital
  *
- *  Dlouhy stisk kdekoliv otevre nastaveni (kalibrace dotyku, otoceni
- *  displeje, WiFi portal, smazani cache obalu).
+ *  A long press anywhere opens the settings (touch calibration, display
+ *  rotation, the WiFi portal, clearing the artwork cache).
  *
- *  Pred nahranim:
- *    1. zkopiruj secrets.example.h na secrets.h a vypln ho
- *       (nebo spust z korene projektu: python tools/get_token.py)
- *    2. Nastroje -> Deska: "ESP32 Dev Module"
+ *  Before flashing:
+ *    1. copy secrets.example.h to secrets.h and fill it in
+ *       (or run this from the project root: python tools/get_token.py)
+ *    2. Tools -> Board: "ESP32 Dev Module"
  *       Partition Scheme: "Huge APP (3MB No OTA/1MB SPIFFS)"
  *
- *  MIT licence, viz LICENSE.
+ *  MIT licence, see LICENSE.
  * ===================================================================== */
 
 #include <Arduino.h>
@@ -46,18 +47,18 @@
 #include "DeckWeather.h"
 
 // ---------------------------------------------------------------------
-//  Stranky
+//  Pages
 // ---------------------------------------------------------------------
-// Poradi tady urcuje poradi stranek pri prejizdeni prstem i poradi
-// tecek ve stavovem radku. Da se libovolne prohodit, vsechno ostatni
-// se na stranky odkazuje jmenem, ne cislem.
+// The order here sets the order of the pages when you swipe and the
+// order of the dots in the status bar. It can be rearranged freely -
+// everything else refers to the pages by name, not by number.
 enum class Page : uint8_t { Spotify = 0, Crypto, Weather, Clock, COUNT };
 constexpr uint8_t PAGE_N = (uint8_t)Page::COUNT;
 
 Page     g_page = Page::Spotify;
 uint32_t g_nextPoll[PAGE_N] = {0, 0, 0, 0};
 
-// Podstavy stranky Spotify
+// Sub-states of the Spotify page
 enum class Sub : uint8_t { NowPlaying, Idle, Error, FullArt, Reauth };
 Sub g_sub = Sub::Idle;
 
@@ -68,18 +69,18 @@ uint32_t g_lastPollAt = 0;
 uint32_t g_backoff    = BACKOFF_START_MS;
 bool     g_haveState  = false;
 
-// Dotyk
+// Touch
 Hit      g_pressedHit = Hit::None;
 uint32_t g_lastCmdAt  = 0;
 int      g_dragValue  = -1;
 
 // ---------------------------------------------------------------------
-//  Pomocne
+//  Helpers
 // ---------------------------------------------------------------------
 inline bool due(uint32_t deadline) { return (int32_t)(millis() - deadline) >= 0; }
 
-// Progress se mezi dotazy dopocitava lokalne, takze bar plyne plynule
-// i kdyz se Spotify pta jen jednou za tri vteriny.
+// Between requests the progress is extrapolated locally, so the bar runs
+// smoothly even though Spotify is only asked every three seconds.
 uint32_t effectiveProgress() {
   if (!g_haveState || !g_state.hasTrack) return 0;
   uint32_t p = g_state.progressMs;
@@ -99,7 +100,7 @@ void applyLed() {
 }
 
 // ---------------------------------------------------------------------
-//  Vykresleni aktualni stranky
+//  Drawing the current page
 // ---------------------------------------------------------------------
 void drawSpotify(bool full) {
   switch (g_sub) {
@@ -122,8 +123,9 @@ void drawPage(bool full) {
 
   switch (g_page) {
     case Page::Spotify:
-      // Stranka Spotify si pozadi bere z obalu alba, ostatni maji
-      // vlastni barevny prechod - proto se to tady prepina.
+      // The Spotify page takes its background from the album art, the
+      // others have a color gradient of their own - which is what gets
+      // switched here.
       Art::useArtBackground(true);
       Draw::refreshPalette();
       drawSpotify(full);
@@ -134,9 +136,9 @@ void drawPage(bool full) {
     default: break;
   }
 
-  // Prekresleni cele stranky smazalo i stavovy radek, takze se musi
-  // vynutit jeho opetovne vykresleni - jinak by zustal prazdny az do
-  // prvni zmeny hodin nebo sily signalu.
+  // Repainting the whole page wiped the status bar too, so it has to be
+  // forced to draw again - otherwise it would stay empty until the clock
+  // or the signal strength changed for the first time.
   if (full) Ui::invalidateStatus();
   Ui::setPageDots(PAGE_N, (uint8_t)g_page);
   Ui::updateStatus();
@@ -149,7 +151,7 @@ void switchPage(int delta) {
 
   int idx = ((int)g_page + delta + PAGE_N) % PAGE_N;
   g_page = (Page)idx;
-  LOGF("[main] stranka -> %d\n", idx);
+  LOGF("[main] page -> %d\n", idx);
 
   if (g_page == Page::Clock) Clock::enter();
 
@@ -159,7 +161,7 @@ void switchPage(int delta) {
 }
 
 // ---------------------------------------------------------------------
-//  Spotify - dotaz a stavy
+//  Spotify - polling and states
 // ---------------------------------------------------------------------
 void showIdleSub(const char* detail) {
   if (g_sub == Sub::Idle) return;
@@ -207,7 +209,7 @@ void pollSpotify() {
         strncpy(g_shownArt, fresh.artId, sizeof(g_shownArt) - 1);
         g_shownArt[sizeof(g_shownArt) - 1] = '\0';
         if (!Art::load(fresh.artId, fresh.artUrl)) {
-          LOGLN("[main] obal se nepodarilo nacist");
+          LOGLN("[main] the artwork would not load");
           Art::unload();
         }
       }
@@ -266,7 +268,7 @@ void pollSpotify() {
 
     case PollResult::Error:
     default:
-      LOGF("[main] poll chyba: %s\n", Spotify::lastError());
+      LOGF("[main] poll error: %s\n", Spotify::lastError());
       g_backoff = min<uint32_t>(g_backoff * 2, BACKOFF_MAX_MS);
       break;
   }
@@ -288,7 +290,8 @@ void pollSpotify() {
   g_nextPoll[(uint8_t)Page::Spotify] = millis() + wait;
 }
 
-// Po stisku tlacitka se vyplati zeptat drive, at obrazovka nelze pozadu.
+// After a button press it pays to ask sooner, so the screen does not
+// lag behind.
 void pollSoon() {
   g_nextPoll[(uint8_t)Page::Spotify] = millis() + POLL_AFTER_CMD_MS;
 }
@@ -303,15 +306,15 @@ void pollActivePage() {
       break;
 
     case Page::Weather: {
-      // Prekreslovat jen kdyz dotaz opravdu prinesl nova data. Drive se
-      // po prejeti na stranku kreslila cela plocha dvakrat - jednou ze
-      // switchPage() a hned znovu z prvniho dotazu - vcetne dvou
-      // ztlumeni podsviceni za sebou.
+      // Only repaint when the request actually brought new data. It used
+      // to draw the whole screen twice after swiping to the page - once
+      // from switchPage() and straight away again from the first request
+      // - including two backlight dips in a row.
       static bool wxDrawn = false;
       bool fresh = Weather::poll();
       g_nextPoll[i] = millis() + max<uint32_t>(Weather::nextPollDelay(), 1000);
-      // Kdyz dotaz selhal, prekreslit stejne - ale jen jednou, aby byla
-      // videt chybova hlaska misto vecneho "nacitam".
+      // If the request failed, repaint anyway - but only once, so the
+      // error message shows instead of an eternal "loading".
       if (fresh || !wxDrawn) { drawPage(true); wxDrawn = true; }
       break;
     }
@@ -325,7 +328,7 @@ void pollActivePage() {
     }
 
     case Page::Clock:
-      g_nextPoll[i] = millis() + 60000;      // hodiny nic nestahuji
+      g_nextPoll[i] = millis() + 60000;      // the clock downloads nothing
       break;
 
     default:
@@ -334,7 +337,7 @@ void pollActivePage() {
 }
 
 // ---------------------------------------------------------------------
-//  Ovladani Spotify
+//  Spotify controls
 // ---------------------------------------------------------------------
 void runCommand(Hit h) {
   if (millis() - g_lastCmdAt < TOUCH_REPEAT_MS) return;
@@ -342,7 +345,8 @@ void runCommand(Hit h) {
 
   switch (h) {
     case Hit::PlayPause:
-      // Optimisticky prehodime ikonu hned, at to nepusobi zaseknute.
+      // Flip the icon optimistically right away, so it does not feel
+      // stuck.
       if (g_state.isPlaying) { Spotify::pause(); g_state.isPlaying = false; }
       else                   { Spotify::play();  g_state.isPlaying = true; }
       Ui::updateControls(g_state);
@@ -354,8 +358,8 @@ void runCommand(Hit h) {
       break;
 
     case Hit::Prev:
-      // Spotify chape "predchozi" jako skok na zacatek, kdyz uz skladba
-      // chvili hraje - stejne jako mobilni aplikace.
+      // Spotify reads "previous" as a jump back to the start once the
+      // track has been playing for a while - same as the mobile app.
       Ui::toast(T(S_PREV_TRACK));
       Spotify::previous();
       break;
@@ -383,14 +387,14 @@ void runCommand(Hit h) {
 }
 
 // ---------------------------------------------------------------------
-//  Nastaveni
+//  Settings
 // ---------------------------------------------------------------------
 void applyCityFromPortal() {
   const char* city = Net::cityFromPortal();
   if (city && *city && strcmp(city, Weather::place()) != 0) {
     Weather::setPlace(city);
     g_nextPoll[(uint8_t)Page::Weather] = millis();
-    LOGF("[main] nove misto pro pocasi: %s\n", city);
+    LOGF("[main] new place for the weather: %s\n", city);
   }
   Net::clearCityFromPortal();
 }
@@ -407,7 +411,7 @@ void openSettings() {
     case Ui::SettingsAction::Rotate:
       Touch::setRotation(Touch::rotation() == 1 ? 3 : 1);
       tft.setRotation(Touch::rotation());
-      Touch::calibrate();          // po otoceni uz stara kalibrace neplati
+      Touch::calibrate();          // after a rotation the old calibration is void
       break;
 
     case Ui::SettingsAction::WifiPortal:
@@ -418,7 +422,8 @@ void openSettings() {
       break;
 
     case Ui::SettingsAction::Language:
-      // Prepnuti jazyka se projevi az pri prekresleni na konci funkce.
+      // The language switch only shows up in the repaint at the end of
+      // this function.
       Lang::toggle();
       break;
 
@@ -446,7 +451,7 @@ void openSettings() {
 }
 
 // ---------------------------------------------------------------------
-//  Dotyk
+//  Touch
 // ---------------------------------------------------------------------
 void handleSpotifyRelease(const TouchEvent& ev) {
   Hit h = g_pressedHit;
@@ -522,7 +527,7 @@ void handleTouch() {
     return;
   }
 
-  // --- stisk -----------------------------------------------------------
+  // --- press -----------------------------------------------------------
   if (ev.pressed) {
     g_dragValue  = -1;
     g_pressedHit = Hit::None;
@@ -533,7 +538,7 @@ void handleTouch() {
     return;
   }
 
-  // --- tazeni po posuvnicich ------------------------------------------
+  // --- dragging along the sliders --------------------------------------
   if (ev.down && ev.dragging && g_page == Page::Spotify) {
     if (g_pressedHit == Hit::Volume && g_state.supportsVolume) {
       g_dragValue = Ui::valueFromX(Hit::Volume, ev.x);
@@ -549,7 +554,7 @@ void handleTouch() {
 
   if (!ev.released) return;
 
-  // --- prejeti prstem = zmena stranky ---------------------------------
+  // --- a swipe = change of page ---------------------------------------
   int dx = ev.x - ev.startX;
   int dy = ev.y - ev.startY;
   bool sliderCaptured =
@@ -558,11 +563,11 @@ void handleTouch() {
   if (!sliderCaptured && abs(dx) > 60 && abs(dx) > 2 * abs(dy)) {
     if (g_pressedHit != Hit::None) Ui::pressFeedback(g_pressedHit, false);
     g_pressedHit = Hit::None;
-    switchPage(dx < 0 ? 1 : -1);      // tah doleva = dalsi stranka
+    switchPage(dx < 0 ? 1 : -1);      // swipe left = next page
     return;
   }
 
-  // --- klepnuti na konkretni strance ----------------------------------
+  // --- a tap on the individual pages -----------------------------------
   switch (g_page) {
     case Page::Spotify:
       if (g_sub == Sub::FullArt) {
@@ -574,7 +579,7 @@ void handleTouch() {
       } else if (g_sub == Sub::NowPlaying) {
         handleSpotifyRelease(ev);
       } else if (ev.tap) {
-        g_nextPoll[(uint8_t)Page::Spotify] = millis();   // zkusit znovu
+        g_nextPoll[(uint8_t)Page::Spotify] = millis();   // try again
       }
       break;
 
@@ -598,35 +603,36 @@ void handleTouch() {
 }
 
 // ---------------------------------------------------------------------
-//  Sonda dotykoveho radice
+//  Touch controller probe
 //
-//  Rodina 2432S024 ma tri varianty a kazda ma dotyk uplne jinde:
-//    -C  kapacitni CST820 na I2C   (SDA 33, SCL 32, RST 25, INT 21)
-//    -R  rezistivni XPT2046 na SPI sdilene s displejem (CS 33, IRQ 36)
-//    -N  zadny dotyk
-//  Misto lustení potisku se deska proste zepta sama sebe.
+//  The 2432S024 family has three variants and each puts the touch
+//  somewhere else entirely:
+//    -C  capacitive CST820 on I2C  (SDA 33, SCL 32, RST 25, INT 21)
+//    -R  resistive XPT2046 on the SPI shared with the display (CS 33, IRQ 36)
+//    -N  no touch at all
+//  Rather than decipher the silkscreen, the board simply asks itself.
 //
-//  MUSI se volat drive nez tft.init(), protoze si na chvili bere piny
-//  displeje (SCK/MOSI/MISO) pro rucne odtaktovane cteni XPT2046.
+//  This MUST be called before tft.init(), because it borrows the display
+//  pins (SCK/MOSI/MISO) for a moment to bit-bang a read of the XPT2046.
 // ---------------------------------------------------------------------
 #if TOUCH_PROBE
 
-// Rucne odtaktovane cteni XPT2046 - nezavisle na jakekoliv knihovne.
+// A bit-banged XPT2046 read - independent of any library.
 uint16_t xptRead(uint8_t cmd, uint8_t sck, uint8_t mosi, uint8_t miso,
                  uint8_t cs) {
   digitalWrite(cs, LOW);
   delayMicroseconds(5);
 
-  for (int i = 7; i >= 0; i--) {                 // prikaz, MSB napred
+  for (int i = 7; i >= 0; i--) {                 // the command, MSB first
     digitalWrite(mosi, (cmd >> i) & 1);
     digitalWrite(sck, HIGH); delayMicroseconds(3);
     digitalWrite(sck, LOW);  delayMicroseconds(3);
   }
-  digitalWrite(sck, HIGH); delayMicroseconds(3); // cekaci takt prevodniku
+  digitalWrite(sck, HIGH); delayMicroseconds(3); // the converter's busy clock
   digitalWrite(sck, LOW);  delayMicroseconds(3);
 
   uint16_t v = 0;
-  for (int i = 0; i < 12; i++) {                 // 12 bitu vysledku
+  for (int i = 0; i < 12; i++) {                 // 12 bits of result
     digitalWrite(sck, HIGH); delayMicroseconds(3);
     v = (uint16_t)((v << 1) | (digitalRead(miso) ? 1 : 0));
     digitalWrite(sck, LOW);  delayMicroseconds(3);
@@ -637,40 +643,40 @@ uint16_t xptRead(uint8_t cmd, uint8_t sck, uint8_t mosi, uint8_t miso,
 }
 
 void probeTouch() {
-  LOGLN("[probe] hledam dotykovy radic...");
+  LOGLN("[probe] looking for a touch controller...");
 
-  // --- 1) kapacitni CST820 na I2C ------------------------------------
-  // Nejdriv, protoze SPI sekvence by kapacitnimu cipu drzela RST.
+  // --- 1) the capacitive CST820 on I2C --------------------------------
+  // First, because the SPI sequence would hold RST on the capacitive chip.
   pinMode(25, OUTPUT);                  // CST820 RST
   digitalWrite(25, LOW);  delay(20);
-  digitalWrite(25, HIGH); delay(60);    // cip po resetu chvili nabiha
+  digitalWrite(25, HIGH); delay(60);    // the chip takes a moment to come up
 
   int i2cFound = 0;
   if (Wire.begin(33, 32, 100000)) {     // SDA 33, SCL 32
     for (uint8_t addr = 1; addr < 127; addr++) {
       Wire.beginTransmission(addr);
       if (Wire.endTransmission() == 0) {
-        LOGF("[probe] I2C odpovida adresa 0x%02X\n", addr);
+        LOGF("[probe] I2C address 0x%02X answers\n", addr);
         i2cFound++;
       }
     }
     Wire.end();
   } else {
-    LOGLN("[probe] I2C se nepodarilo nastartovat");
+    LOGLN("[probe] I2C would not start");
   }
 
   if (i2cFound) {
-    LOGLN("[probe] VYSLEDEK: kapacitni dotyk (varianta 2432S024C)");
+    LOGLN("[probe] RESULT: capacitive touch (the 2432S024C variant)");
     return;
   }
-  LOGLN("[probe] na I2C nikdo neodpovedel");
+  LOGLN("[probe] nobody answered on I2C");
 
-  // --- 2) rezistivni XPT2046 na sbernici displeje ---------------------
+  // --- 2) the resistive XPT2046 on the display bus ---------------------
   const uint8_t SCK = 14, MOSI = 13, MISO = 12, CS = 33;
-  pinMode(15, OUTPUT); digitalWrite(15, HIGH);   // CS displeje vypnout
+  pinMode(15, OUTPUT); digitalWrite(15, HIGH);   // deselect the display CS
   pinMode(SCK, OUTPUT);  digitalWrite(SCK, LOW);
   pinMode(MOSI, OUTPUT); digitalWrite(MOSI, LOW);
-  pinMode(MISO, INPUT);                          // GPIO12 je strapping - jen cist
+  pinMode(MISO, INPUT);                          // GPIO12 is a strapping pin - read only
   pinMode(CS, OUTPUT);   digitalWrite(CS, HIGH);
   delay(5);
 
@@ -679,17 +685,17 @@ void probeTouch() {
   uint16_t y  = xptRead(0x91, SCK, MOSI, MISO, CS);
   LOGF("[probe] XPT2046 na CS33: z1=%u x=%u y=%u\n", z1, x, y);
 
-  // Nepripojeny cip vraci porad 0 nebo porad 4095 (plovouci vstup).
+  // A chip that is not there returns all 0 or all 4095 (a floating input).
   bool plausible = !((z1 == 0 && x == 0 && y == 0) ||
                      (z1 == 4095 && x == 4095 && y == 4095));
 
   if (plausible) {
-    LOGLN("[probe] VYSLEDEK: rezistivni dotyk XPT2046 (varianta 2432S024R)");
+    LOGLN("[probe] RESULT: resistive XPT2046 touch (the 2432S024R variant)");
   } else {
-    LOGLN("[probe] VYSLEDEK: dotyk nenalezen (varianta 2432S024N?)");
+    LOGLN("[probe] RESULT: no touch found (the 2432S024N variant?)");
   }
 
-  // Piny zase pustit, at je tft.init() muze prevzit.
+  // Release the pins again, so tft.init() can take them over.
   pinMode(SCK, INPUT);
   pinMode(MOSI, INPUT);
   pinMode(CS, INPUT);
@@ -704,26 +710,26 @@ void setup() {
   delay(200);
   LOGLN("\n=== SpotifyDeck ===");
 
-  // Duvod posledniho restartu. Kdyz se deska sama restartuje, tohle hned
-  // rekne, jestli to byl panic, watchdog, podpeti nebo nase vlastni
-  // ESP.restart() - jinak se to hada.
+  // The reason for the last reset. When the board restarts on its own,
+  // this says right away whether it was a panic, a watchdog, a brownout
+  // or our own ESP.restart() - otherwise you are guessing.
   const char* reasons[] = {
-      "neznamy",    "zapnuti",        "externi reset",   "software",
-      "panic",      "watchdog (int)", "watchdog (task)", "watchdog (jiny)",
-      "deep sleep", "podpeti",        "SDIO"};
+      "unknown",    "power on",       "external reset",  "software",
+      "panic",      "watchdog (int)", "watchdog (task)", "watchdog (other)",
+      "deep sleep", "brownout",       "SDIO"};
   int r = (int)esp_reset_reason();
-  LOGF("[main] duvod restartu: %s (%d)\n",
+  LOGF("[main] reset reason: %s (%d)\n",
        (r >= 0 && r < (int)(sizeof(reasons) / sizeof(reasons[0]))) ? reasons[r]
                                                                   : "?",
        r);
 
-  Lang::begin();           // jazyk prostredi nacteny z NVS
+  Lang::begin();           // the UI language, loaded from NVS
 
 #if TOUCH_PROBE
-  probeTouch();            // musi byt pred tft.init()
+  probeTouch();            // has to run before tft.init()
 #endif
 
-  Touch::begin();          // nacte otoceni z NVS jeste pred inicializaci TFT
+  Touch::begin();          // loads the rotation from NVS, before the TFT is up
   Ui::begin();
   Ui::splash();
 
@@ -740,7 +746,7 @@ void setup() {
   Spotify::begin();
   if (!Spotify::ensureToken() && Spotify::needsReauth()) g_sub = Sub::Reauth;
 
-  // Prvni spusteni bez kalibrace - nabidnout ji rovnou.
+  // A first run with no calibration - offer one right away.
   if (!Touch::hasCalibration()) {
     Ui::bootStatus(T(S_CAL_TITLE), T(S_CAL_SOON));
     delay(1200);
@@ -750,7 +756,7 @@ void setup() {
   for (uint8_t i = 0; i < PAGE_N; i++) g_nextPoll[i] = millis();
   drawPage(true);
 
-  LOGF("[main] volna pamet po startu: %u B\n", (unsigned)ESP.getFreeHeap());
+  LOGF("[main] free heap after startup: %u B\n", (unsigned)ESP.getFreeHeap());
 }
 
 void loop() {

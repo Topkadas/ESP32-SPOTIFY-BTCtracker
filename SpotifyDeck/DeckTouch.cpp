@@ -11,35 +11,37 @@
 namespace {
 
 // ---------------------------------------------------------------------
-//  Dve zcela ruzna zapojeni dotyku podle modelu desky:
+//  Two completely different touch wirings, depending on the board model:
 //
-//  2432S024R - XPT2046 SDILI SPI s displejem (CS 33). Obslouzi ho primo
-//              TFT_eSPI, ktera si hlida stridani transakci na sbernici -
-//              vyzaduje "#define TOUCH_CS 33" v User_Setup.h.
+//  2432S024R - the XPT2046 SHARES SPI with the display (CS 33). TFT_eSPI
+//              drives it directly and takes care of interleaving the bus
+//              transactions - it needs "#define TOUCH_CS 33" in
+//              User_Setup.h.
 //
-//  2432S028R - XPT2046 ma VLASTNI sbernici (SCK 25, MOSI 32, MISO 39,
-//              CS 33). Tu obsluhuje knihovna XPT2046_Touchscreen, a musi
-//              bezet na jinem SPI periferiu nez displej - jinak druhe
-//              spi.begin() prepne vstup MISO pres GPIO matici na piny
-//              displeje a dotyk cte cizi pin.
+//  2432S028R - the XPT2046 has its OWN bus (SCK 25, MOSI 32, MISO 39,
+//              CS 33). The XPT2046_Touchscreen library drives that one,
+//              and it has to run on a different SPI peripheral than the
+//              display - otherwise the second spi.begin() reroutes the
+//              MISO input through the GPIO matrix onto the display pins
+//              and touch ends up reading someone else's pin.
 // ---------------------------------------------------------------------
 #if DECK_BOARD == 24
   #if !defined(TOUCH_CS)
-    #error "Pro 2432S024 zkopiruj User_Setup.h z korene projektu do TFT_eSPI (potrebuje TOUCH_CS 33)."
+    #error "For the 2432S024, copy User_Setup.h from the project root into TFT_eSPI (it needs TOUCH_CS 33)."
   #endif
 #else
   #if defined(USE_HSPI_PORT)
-SPIClass            touchSpi(VSPI);   // displej je na HSPI
+SPIClass            touchSpi(VSPI);   // the display is on HSPI
   #else
-SPIClass            touchSpi(HSPI);   // displej je na VSPI
+SPIClass            touchSpi(HSPI);   // the display is on VSPI
   #endif
 XPT2046_Touchscreen ts(PIN_TOUCH_CS, PIN_TOUCH_IRQ);
 #endif
 
 Preferences         prefs;
 
-// Jednotne cteni surovych hodnot bez ohledu na zapojeni.
-// Vraci true, kdyz je prst na displeji.
+// One way to read the raw values, whatever the wiring is.
+// Returns true when a finger is on the display.
 bool readRawTouch(int16_t& rx, int16_t& ry, int16_t& rz) {
 #if DECK_BOARD == 24
   rz = (int16_t)tft.getTouchRawZ();
@@ -56,8 +58,8 @@ bool readRawTouch(int16_t& rx, int16_t& ry, int16_t& rz) {
 #endif
 }
 
-// Kalibrace: dva referencni body. "swap" rika, jestli surova osa X
-// odpovida X na displeji, nebo jestli je panel otoceny o 90 stupnu.
+// Calibration: two reference points. "swap" says whether the raw X axis
+// matches X on the display, or whether the panel is turned 90 degrees.
 struct Calib {
   bool    swap = false;
   int16_t rawX0 = TOUCH_RAW_X_MIN, rawX1 = TOUCH_RAW_X_MAX;
@@ -69,10 +71,10 @@ Calib    g_cal;
 uint8_t  g_rotation = DEFAULT_ROTATION;
 uint32_t g_lastActivity = 0;
 
-// Body, na ktere se pri kalibraci klepa.
+// The points you tap during calibration.
 constexpr int16_t CAL_INSET = 26;
 
-// --- prubezny stav gest ---------------------------------------------
+// --- running gesture state ---------------------------------------------
 bool     g_down       = false;
 bool     g_dragging   = false;
 bool     g_longFired  = false;
@@ -80,7 +82,7 @@ int16_t  g_startX = -1, g_startY = -1;
 int16_t  g_lastX  = -1, g_lastY  = -1;
 uint32_t g_downAt     = 0;
 uint32_t g_lastSample = 0;
-uint8_t  g_missCount  = 0;      // kolik cteni po sobe nevidelo prst
+uint8_t  g_missCount  = 0;      // how many reads in a row saw no finger
 
 int16_t mapAxis(int16_t raw, int16_t a0, int16_t a1, int16_t span) {
   if (a1 == a0) return 0;
@@ -88,12 +90,13 @@ int16_t mapAxis(int16_t raw, int16_t a0, int16_t a1, int16_t span) {
   return (int16_t)constrain(v, 0L, (long)span - 1);
 }
 
-// Prevede surovy vzorek na pixely.
+// Turns a raw sample into pixels.
 //
-// Kalibrace se vzdy porizuje pri aktualnim otoceni a setRotation() ji
-// zahazuje, takze u zkalibrovane desky uz je otoceni "zapecene" v ni.
-// Jen zalozni (nezkalibrovane) hodnoty plati pro rotaci 1 - pri rotaci 3
-// je displej otoceny o 180 stupnu, takze se obe osy musi prevratit.
+// A calibration is always taken at the current rotation and setRotation()
+// throws it away, so on a calibrated board the rotation is already baked
+// into it. Only the fallback (uncalibrated) values assume rotation 1 - at
+// rotation 3 the display is turned 180 degrees, so both axes have to be
+// flipped.
 void rawToScreen(int16_t rx, int16_t ry, int16_t& sx, int16_t& sy) {
   int16_t ax = g_cal.swap ? ry : rx;
   int16_t ay = g_cal.swap ? rx : ry;
@@ -123,8 +126,8 @@ void loadCalib() {
   prefs.end();
 
   if (!g_cal.valid) {
-    // Zalozni odhad z komunitnich hodnot - staci na to, aby sly
-    // zmacknout tlacitka a spustit poradnou kalibraci.
+    // A fallback guess from community values - good enough to hit the
+    // buttons and start a proper calibration.
     g_cal.swap  = false;
     g_cal.rawX0 = TOUCH_RAW_X_MIN;
     g_cal.rawX1 = TOUCH_RAW_X_MAX;
@@ -145,8 +148,8 @@ void saveCalib() {
   g_cal.valid = true;
 }
 
-// Precte jeden usazeny dotyk: pocka, az prst dosedne, nasbira vzorky
-// a vrati jejich median. Pouziva se jen pri kalibraci.
+// Reads one settled touch: waits for the finger to land, collects
+// samples and returns their median. Only used during calibration.
 bool readSettled(int16_t& rx, int16_t& ry, uint32_t timeoutMs) {
   const uint32_t deadline = millis() + timeoutMs;
 
@@ -155,7 +158,7 @@ bool readSettled(int16_t& rx, int16_t& ry, uint32_t timeoutMs) {
   while ((int32_t)(millis() - deadline) < 0) {
     if (!readRawTouch(px, py, pz)) { delay(10); continue; }
 
-    delay(80);                                  // nechat prst usadit
+    delay(80);                                  // let the finger settle
     int16_t xs[9], ys[9];
     int n = 0;
     for (int i = 0; i < 9; i++) {
@@ -176,7 +179,7 @@ bool readSettled(int16_t& rx, int16_t& ry, uint32_t timeoutMs) {
     rx = xs[n / 2];
     ry = ys[n / 2];
 
-    while (readRawTouch(px, py, pz)) delay(20);         // pockat na zvednuti
+    while (readRawTouch(px, py, pz)) delay(20);         // wait for the finger to lift
     delay(150);
     return true;
   }
@@ -197,25 +200,25 @@ void Touch::begin() {
   loadCalib();
 
 #if DECK_BOARD == 24
-  // Nic se neinicializuje - dotyk jede po sbernici displeje a stara se
-  // o nej TFT_eSPI, ktera uz bezi.
-  LOGLN("[touch] XPT2046 na sbernici displeje (CS 33)");
+  // Nothing to initialise - touch rides the display bus and TFT_eSPI,
+  // which is already running, looks after it.
+  LOGLN("[touch] XPT2046 on the display bus (CS 33)");
 #else
   touchSpi.begin(PIN_TOUCH_SCK, PIN_TOUCH_MISO, PIN_TOUCH_MOSI, PIN_TOUCH_CS);
   ts.begin(touchSpi);
-  // Rotaci resi az rawToScreen(), aby kalibrace platila nezavisle na tom,
-  // jak je otoceny displej. 1 = identita, zadna transformace.
+  // Rotation is handled later in rawToScreen(), so a calibration holds
+  // no matter how the display is turned. 1 = identity, no transform.
   ts.setRotation(1);
   #if defined(USE_HSPI_PORT)
-  LOGLN("[touch] XPT2046 na vlastni sbernici VSPI");
+  LOGLN("[touch] XPT2046 on its own VSPI bus");
   #else
-  LOGLN("[touch] XPT2046 na vlastni sbernici HSPI");
+  LOGLN("[touch] XPT2046 on its own HSPI bus");
   #endif
 #endif
 
   g_lastActivity = millis();
-  LOGF("[touch] kalibrace %s, rotace %u\n",
-       g_cal.valid ? "z NVS" : "vychozi", g_rotation);
+  LOGF("[touch] calibration %s, rotation %u\n",
+       g_cal.valid ? "from NVS" : "default", g_rotation);
 }
 
 TouchEvent Touch::poll() {
@@ -223,9 +226,10 @@ TouchEvent Touch::poll() {
 
   uint32_t now = millis();
 
-  // Dlouhy stisk se musi vyhodnotit i mimo vzorkovaci okno. Kdyz pres
-  // nej probehne blokujici dotaz na sit (klidne sekundu), prah by se
-  // jinak prekrocil bez povsimnuti a gesto by doslo jako klepnuti.
+  // A long press has to be evaluated outside the sampling window too. If
+  // a blocking network request (easily a second) runs across it, the
+  // threshold would otherwise pass unnoticed and the gesture would land
+  // as a tap.
   if (g_down && !g_longFired && !g_dragging &&
       (now - g_downAt) > TOUCH_LONGPRESS_MS) {
     g_longFired  = true;
@@ -237,8 +241,8 @@ TouchEvent Touch::poll() {
   }
 
   if (now - g_lastSample < 12) {
-    // Mezi vzorky jen zopakujeme aktualni stav, at volajici nemusi
-    // resit, jak casto poll() vola.
+    // Between samples we just repeat the current state, so the caller
+    // does not have to care how often it calls poll().
     ev.down     = g_down;
     ev.dragging = g_dragging;
     ev.x = g_lastX; ev.y = g_lastY;
@@ -273,8 +277,8 @@ TouchEvent Touch::poll() {
     g_lastX = sx; g_lastY = sy;
     g_lastActivity = now;
   } else if (g_down) {
-    // Rezistivni panel obcas jeden vzorek "vypadne" - pocitame az tri
-    // po sobe, nez prohlasime, ze se prst zvedl.
+    // A resistive panel occasionally "drops" a sample - we count up to
+    // three in a row before declaring that the finger has lifted.
     if (++g_missCount < 3) {
       ev.down     = true;
       ev.dragging = g_dragging;
@@ -314,21 +318,21 @@ bool Touch::calibrate() {
     drawTarget(px[i], py[i], TFT_GREENYELLOW);
 
     if (!readSettled(rx[i], ry[i], 30000)) {
-      LOGLN("[touch] kalibrace vyprsela");
+      LOGLN("[touch] calibration timed out");
       return false;
     }
-    LOGF("[touch] bod %d: raw %d,%d\n", i + 1, rx[i], ry[i]);
+    LOGF("[touch] point %d: raw %d,%d\n", i + 1, rx[i], ry[i]);
   }
 
   int dx = abs(rx[1] - rx[0]);
   int dy = abs(ry[1] - ry[0]);
   if (dx < 200 && dy < 200) {
-    LOGLN("[touch] body jsou moc blizko, kalibrace zamitnuta");
+    LOGLN("[touch] the points are too close, calibration rejected");
     return false;
   }
 
-  // Kdyz se mezi levym hornim a pravym dolnim rohem zmenila vic osa Y
-  // nez X, je panel vuci displeji otoceny o 90 stupnu.
+  // If Y changed more than X between the top-left and bottom-right
+  // corners, the panel is turned 90 degrees relative to the display.
   g_cal.swap = (dy > dx);
 
   int16_t ax0 = g_cal.swap ? ry[0] : rx[0];
@@ -336,7 +340,7 @@ bool Touch::calibrate() {
   int16_t ay0 = g_cal.swap ? rx[0] : ry[0];
   int16_t ay1 = g_cal.swap ? rx[1] : ry[1];
 
-  // Z dvou bodu dopocitame, jake surove hodnoty odpovidaji okrajum (0 a max).
+  // From the two points, work out which raw values sit at the edges (0 and max).
   long spanX = (long)ax1 - ax0;
   long spanY = (long)ay1 - ay0;
   if (spanX == 0 || spanY == 0) return false;
@@ -350,7 +354,7 @@ bool Touch::calibrate() {
   g_cal.rawY1 = (int16_t)(ay0 + spanY * (SCREEN_H - 1 - py[0]) / pySpan);
 
   saveCalib();
-  LOGF("[touch] ulozeno: swap=%d X %d..%d  Y %d..%d\n",
+  LOGF("[touch] saved: swap=%d X %d..%d  Y %d..%d\n",
        (int)g_cal.swap, g_cal.rawX0, g_cal.rawX1, g_cal.rawY0, g_cal.rawY1);
 
   tft.fillScreen(TFT_BLACK);
@@ -378,7 +382,7 @@ void Touch::setRotation(uint8_t r) {
   prefs.begin("deck", false);
   prefs.putUChar("rot", r);
   prefs.end();
-  // Otocenim se meni i smysl kalibrace - ta stara uz neplati.
+  // Rotating changes what a calibration means - the old one is void.
   forgetCalibration();
 }
 
